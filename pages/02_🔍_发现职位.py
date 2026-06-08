@@ -8,6 +8,99 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+
+
+# ============================================================
+# 辅助函数（必须在页面主逻辑之前定义）
+# ============================================================
+def _render_report_editor(report):
+    """渲染可编辑的定位报告"""
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 🎯 核心方向")
+        for d in report.get("core_directions", []):
+            st.markdown(f"**{d.get('role', '')}** — 匹配度 {d.get('match_score', 0)}")
+            st.caption(d.get("reason", ""))
+            st.caption(f"优势: {', '.join(d.get('key_strengths', []))}")
+
+    with col2:
+        st.markdown("### 🔄 可迁移方向")
+        for d in report.get("transferable_directions", []):
+            st.markdown(f"**{d.get('role', '')}** → {d.get('new_industry', '')}")
+            st.caption(f"可迁移度: {d.get('transferability_score', 0)}")
+            st.caption(f"可复用: {', '.join(d.get('transferable_skills', []))}")
+            st.caption(f"需补充: {', '.join(d.get('skill_gaps', []))}")
+
+    st.markdown("### ⚠️ 弱项提醒")
+    for w in report.get("weakness_alerts", []):
+        sev = w.get("severity", "low")
+        icon = "🔴" if sev == "high" else "🟡" if sev == "medium" else "🟢"
+        st.markdown(f"{icon} **{w.get('area', '')}**: {w.get('description', '')}")
+
+    st.markdown("### 💰 薪资锚定")
+    salary = report.get("salary_anchor", {})
+    if salary:
+        st.markdown(f"- 当前估计: {salary.get('current_estimated_range', 'N/A')}")
+        st.markdown(f"- 核心方向: {salary.get('core_direction_range', 'N/A')}")
+        st.markdown(f"- 可迁移方向: {salary.get('transferable_range', 'N/A')}")
+
+    st.markdown("### 🔍 搜索关键词")
+    kw = report.get("search_keywords", {})
+    st.markdown(f"**中文:** {', '.join(kw.get('zh', {}).get('core', []) + kw.get('zh', {}).get('transferable', []))}")
+    st.markdown(f"**English:** {', '.join(kw.get('en', {}).get('core', []) + kw.get('en', {}).get('transferable', []))}")
+
+
+def _classify_industry(job: dict, report: dict) -> str:
+    """判断岗位属于核心/可迁移/探索"""
+    title = job.get("title", "").lower()
+    desc = job.get("description", "").lower()[:500]
+    for d in report.get("core_directions", []):
+        role = d.get("role", "").lower()
+        if role and (role in title or role in desc):
+            return "核心行业"
+    for d in report.get("transferable_directions", []):
+        role = d.get("role", "").lower()
+        if role and (role in title or role in desc):
+            return "可迁移"
+    return "探索"
+
+
+def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list:
+    """对搜索结果进行即时匹配"""
+    from modules.matcher import JobMatcher
+    matcher = JobMatcher(llm_client)
+    results = []
+    jobs = jobs_df.head(max_jobs).to_dict("records")
+    for job in jobs:
+        match = matcher.match_single(resume, job)
+        tag = _classify_industry(job, report)
+        results.append({**job, "_match": match, "_industry_tag": tag})
+    results.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+    return results
+
+
+def _filter_jobs(all_jobs: list, industry_filter: str, channel_filter: str, sort_by: str) -> list:
+    """筛选和排序"""
+    result = list(all_jobs)
+    if industry_filter != "全部":
+        tag_map = {"🔵 核心行业": "核心行业", "🟢 可迁移": "可迁移", "🟡 探索": "探索"}
+        target_tag = tag_map.get(industry_filter, industry_filter)
+        result = [j for j in result if j.get("_industry_tag", "") == target_tag]
+    if channel_filter != "全部":
+        if channel_filter == "海外平台":
+            result = [j for j in result if j.get("source_platform") not in ("manual", None, "")]
+        elif channel_filter == "手动粘贴":
+            result = [j for j in result if j.get("source_platform") == "manual"]
+    if sort_by == "按匹配度":
+        result.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+    else:
+        result.reverse()
+    return result
+
+
+# ============================================================
+# 页面主逻辑
+# ============================================================
 st.title("🔍 发现职位")
 
 if not st.session_state.get("resume_parsed"):
@@ -384,105 +477,3 @@ if st.session_state.all_jobs:
             ]
             st.success(f"已选择 {len(selected)} 个岗位，请前往「✨ 生成简历」页面")
             st.switch_page("pages/04_✨_生成简历.py")
-
-
-# ============================================================
-# 辅助函数
-# ============================================================
-def _render_report_editor(report):
-    """渲染可编辑的定位报告"""
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 🎯 核心方向")
-        for d in report.get("core_directions", []):
-            st.markdown(f"**{d.get('role', '')}** — 匹配度 {d.get('match_score', 0)}")
-            st.caption(d.get("reason", ""))
-            st.caption(f"优势: {', '.join(d.get('key_strengths', []))}")
-
-    with col2:
-        st.markdown("### 🔄 可迁移方向")
-        for d in report.get("transferable_directions", []):
-            st.markdown(f"**{d.get('role', '')}** → {d.get('new_industry', '')}")
-            st.caption(f"可迁移度: {d.get('transferability_score', 0)}")
-            st.caption(f"可复用: {', '.join(d.get('transferable_skills', []))}")
-            st.caption(f"需补充: {', '.join(d.get('skill_gaps', []))}")
-
-    st.markdown("### ⚠️ 弱项提醒")
-    for w in report.get("weakness_alerts", []):
-        sev = w.get("severity", "low")
-        icon = "🔴" if sev == "high" else "🟡" if sev == "medium" else "🟢"
-        st.markdown(f"{icon} **{w.get('area', '')}**: {w.get('description', '')}")
-
-    st.markdown("### 💰 薪资锚定")
-    salary = report.get("salary_anchor", {})
-    if salary:
-        st.markdown(f"- 当前估计: {salary.get('current_estimated_range', 'N/A')}")
-        st.markdown(f"- 核心方向: {salary.get('core_direction_range', 'N/A')}")
-        st.markdown(f"- 可迁移方向: {salary.get('transferable_range', 'N/A')}")
-
-    st.markdown("### 🔍 搜索关键词")
-    kw = report.get("search_keywords", {})
-    st.markdown(f"**中文:** {', '.join(kw.get('zh', {}).get('core', []) + kw.get('zh', {}).get('transferable', []))}")
-    st.markdown(f"**English:** {', '.join(kw.get('en', {}).get('core', []) + kw.get('en', {}).get('transferable', []))}")
-
-
-def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list:
-    """对搜索结果进行即时匹配"""
-    from modules.matcher import JobMatcher
-
-    matcher = JobMatcher(llm_client)
-    results = []
-
-    jobs = jobs_df.head(max_jobs).to_dict("records")
-    for job in jobs:
-        # 简单预过滤：跳过明显不相关的
-        match = matcher.match_single(resume, job)
-        tag = _classify_industry(job, report)
-        results.append({**job, "_match": match, "_industry_tag": tag})
-
-    # 按匹配度排序
-    results.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
-    return results
-
-
-def _classify_industry(job: dict, report: dict) -> str:
-    """判断岗位属于核心/可迁移/探索"""
-    title = job.get("title", "").lower()
-    desc = job.get("description", "").lower()[:500]
-
-    # 检查核心方向关键词
-    for d in report.get("core_directions", []):
-        role = d.get("role", "").lower()
-        if role and (role in title or role in desc):
-            return "核心行业"
-
-    # 检查可迁移方向关键词
-    for d in report.get("transferable_directions", []):
-        role = d.get("role", "").lower()
-        if role and (role in title or role in desc):
-            return "可迁移"
-
-    return "探索"
-
-
-def _filter_jobs(all_jobs: list, industry_filter: str, channel_filter: str, sort_by: str) -> list:
-    """筛选和排序"""
-    result = list(all_jobs)
-
-    if industry_filter != "全部":
-        tag_map = {"🔵 核心行业": "核心行业", "🟢 可迁移": "可迁移", "🟡 探索": "探索"}
-        target_tag = tag_map.get(industry_filter, industry_filter)
-        result = [j for j in result if j.get("_industry_tag", "") == target_tag]
-
-    if channel_filter != "全部":
-        if channel_filter == "海外平台":
-            result = [j for j in result if j.get("source_platform") not in ("manual", None, "")]
-        elif channel_filter == "手动粘贴":
-            result = [j for j in result if j.get("source_platform") == "manual"]
-
-    if sort_by == "按匹配度":
-        result.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
-    else:
-        result.reverse()  # 最新的在前面
-
-    return result
