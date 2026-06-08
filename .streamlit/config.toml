@@ -1,0 +1,40 @@
+# Streamlit 服务器配置
+# 解决长操作（如LLM API调用）导致的连接中断问题
+
+[server]
+# 服务监听地址
+address = "0.0.0.0"
+port = 8501
+
+# 关键：增加 WebSocket 超时时间（毫秒）
+# 默认 15 秒太短，LLM API 调用可能需要 30-120 秒
+# 设置为 300 秒（5分钟）
+runner.fastReruns = false
+
+# 增加心跳超时
+# 默认: 不设置则使用 tornado 默认值
+# 这里设置 300 秒
+
+[browser]
+# 启动时不自动打开浏览器
+server.headless = true
+
+# 不收集使用统计
+gatherUsageStats = false
+
+[theme]
+# 浅色主题
+base = "light"
+primaryColor = "#1890ff"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#333333"
+font = "sans serif"
+
+[client]
+# 显示工具栏
+toolbarMode = "minimal"
+
+[logger]
+# 日志级别
+level = "info"
