@@ -8,6 +8,7 @@ Streamlit 多页面应用
 """
 
 import streamlit as st
+from pathlib import Path
 
 st.set_page_config(
     page_title="半自动找工作工具",

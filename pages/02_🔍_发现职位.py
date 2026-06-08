@@ -312,15 +312,57 @@ with tab1:
 
 # ---- Tab 2: 国内平台直达搜索 ----
 with tab2:
-    st.markdown("**AI 会生成直达搜索链接，点击即可跳转到招聘平台**")
-    st.caption("浏览器脚本（浏览即收集）将在下一批更新中加入")
+    st.markdown("**AI 生成直达搜索链接 + 浏览器自动采集**")
 
+    # 采集器状态
+    col_s1, col_s2 = st.columns([3, 1])
+    with col_s1:
+        try:
+            import httpx
+            resp = httpx.get("http://localhost:8765/", timeout=2)
+            if resp.status_code == 200:
+                data = resp.json()
+                st.success(f"✅ 采集器已运行 — 已收集 {data.get('total_collected', 0)} 个国内岗位")
+            else:
+                st.info("🔌 采集器未启动，点击下方按钮启动")
+        except Exception:
+            st.info("🔌 采集器未启动，点击下方按钮启动")
+
+    with col_s2:
+        if st.button("▶️ 启动采集器", use_container_width=True, key="start_collector"):
+            st.info("请在终端运行: `python collector_server.py`")
+            st.caption("然后安装浏览器脚本，浏览 Boss直聘/猎聘 时自动采集")
+
+    # 浏览器脚本安装说明
+    with st.expander("📥 安装浏览器采集脚本（首次使用需要）"):
+        st.markdown("""
+        **步骤 1：安装 Tampermonkey 插件**
+        - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+        - Edge: [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+
+        **步骤 2：导入采集脚本**
+        - 点击 Tampermonkey 图标 → 创建新脚本
+        - 复制 `browser_script/boss_collector.user.js` 的全部内容粘贴进去
+        - 同样操作导入 `browser_script/liepin_collector.user.js`
+        - 保存（Ctrl+S）
+
+        **步骤 3：启动本地接收器**
+        - 打开终端，运行：`python collector_server.py`
+        - 看到 "本地职位采集接收器已启动" 即成功
+
+        **使用方式：**
+        - 正常浏览 Boss直聘/猎聘，点击搜索结果右侧的绿色「📥 采集」按钮
+        - 打开职位详情页会自动采集
+        - 采集到的职位会出现在下方的列表中
+        """)
+
+    # AI 生成的直达搜索链接
     keywords_zh = report.get("search_keywords", {}).get("zh", {})
     core_kw = keywords_zh.get("core", [])
     trans_kw = keywords_zh.get("transferable", [])
 
     if core_kw or trans_kw:
-        st.markdown("### 🔗 直达搜索链接")
+        st.markdown("### 🔗 AI 生成的直达搜索链接")
 
         if core_kw:
             st.markdown("**核心方向：**")
@@ -344,12 +386,50 @@ with tab2:
                     url2 = f"https://www.liepin.com/zhaopin/?key={kw}"
                     st.markdown(f"[🔍 猎聘 — {kw}]({url2})")
 
-        st.info(
-            "找到感兴趣的职位后，复制 JD 内容，粘贴到右侧「📋 手动粘贴 JD」标签页，"
-            "AI 会自动计算匹配度并生成定制简历。"
-        )
-    else:
-        st.info("AI 定位报告中没有搜索关键词，请先生成定位报告")
+    # 已采集的国内岗位
+    try:
+        import httpx
+        resp = httpx.get("http://localhost:8765/jobs", timeout=2)
+        if resp.status_code == 200:
+            collected = resp.json().get("jobs", [])
+            if collected:
+                st.markdown("---")
+                st.markdown(f"### 📥 浏览器采集的国内岗位（{len(collected)} 个）")
+
+                for i, cjob in enumerate(collected):
+                    with st.expander(f"#{i+1} {cjob.get('company', '?')} — {cjob.get('title', '?')}"):
+                        col_a, col_b = st.columns([6, 2])
+                        with col_a:
+                            if cjob.get("salary"):
+                                st.caption(f"💰 {cjob['salary']} | 📍 {cjob.get('location', '')}")
+                            if cjob.get("description"):
+                                st.markdown(cjob.get("description", "")[:400])
+
+                        with col_b:
+                            if st.button("✅ 导入并匹配", key=f"import_dom_{i}", use_container_width=True):
+                                with st.spinner("正在匹配..."):
+                                    jd_parsed = {
+                                        "company": cjob.get("company", ""),
+                                        "title": cjob.get("title", ""),
+                                        "location": cjob.get("location", ""),
+                                        "description": cjob.get("description", ""),
+                                        "source_platform": "boss_auto",
+                                        "job_url": cjob.get("job_url", ""),
+                                    }
+                                    from modules.matcher import JobMatcher
+                                    matcher = JobMatcher(st.session_state.llm_client)
+                                    match = matcher.match_single(
+                                        st.session_state.resume_parsed, jd_parsed,
+                                        st.session_state.get("config", {}).get("preferences", {}),
+                                    )
+                                    tag = _classify_industry(jd_parsed, report)
+                                    st.session_state.all_jobs.insert(0, {
+                                        **jd_parsed, "_match": match, "_industry_tag": tag
+                                    })
+                                    st.success(f"已导入！匹配度: {match.get('overall_score', 0)}")
+                                    st.rerun()
+    except Exception:
+        pass
 
 # ---- Tab 3: 手动粘贴 JD ----
 with tab3:
