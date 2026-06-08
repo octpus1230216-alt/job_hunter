@@ -221,9 +221,21 @@ with tab1:
             height=150,
             help="可以直接使用AI生成的关键词，也可以自行修改"
         )
+    # JobSpy 国家映射
+    JOBSPY_COUNTRIES = {
+        "中国": "china", "美国": "usa/us/united states", "英国": "uk/united kingdom",
+        "德国": "germany", "法国": "france", "日本": "japan", "新加坡": "singapore",
+        "加拿大": "canada", "澳大利亚": "australia", "印度": "india",
+        "荷兰": "netherlands", "瑞士": "switzerland", "韩国": "south korea",
+        "香港": "hong kong", "全球": "worldwide",
+    }
+
     with col2:
-        countries = st.multiselect("目标国家", ["US", "GB", "DE", "SG", "JP", "CA", "AU", "NL"],
-                                    default=["US"])
+        countries_display = st.multiselect(
+            "目标国家",
+            list(JOBSPY_COUNTRIES.keys()),
+            default=["美国"],
+        )
         hours_old = st.slider("发布时间（小时）", 24, 720, 168, 24)
         platforms = st.multiselect("平台", ["indeed", "linkedin", "glassdoor", "google"],
                                     default=["indeed"],
@@ -240,14 +252,15 @@ with tab1:
                     from jobspy import scrape_jobs
 
                     all_results = []
-                    total_terms = len(terms) * len(countries) * len(platforms)
+                    total_terms = len(terms) * len(countries_display) * len(platforms)
                     count = 0
 
-                    for term in terms[:3]:  # 限制搜索数量避免过慢
-                        for country in countries[:3]:
+                    for term in terms[:3]:
+                        for disp_name in countries_display[:3]:
+                            country = JOBSPY_COUNTRIES.get(disp_name, disp_name)
                             for platform in platforms[:2]:
                                 count += 1
-                                st.write(f"🔍 ({count}/{min(total_terms, 18)}) {platform}: {term} in {country}")
+                                st.write(f"🔍 ({count}/{min(total_terms, 18)}) {platform}: {term} in {disp_name}")
 
                                 try:
                                     kwargs = {

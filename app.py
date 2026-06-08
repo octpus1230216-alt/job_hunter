@@ -32,7 +32,17 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 初始化 session state
 # ============================================================
 if "resume_parsed" not in st.session_state:
-    st.session_state.resume_parsed = None
+    # 尝试自动加载已保存的简历
+    import json
+    resume_cache_path = Path(__file__).parent / "data" / "resume_parsed.json"
+    if resume_cache_path.exists():
+        try:
+            with open(resume_cache_path, "r", encoding="utf-8") as f:
+                st.session_state.resume_parsed = json.load(f)
+        except Exception:
+            st.session_state.resume_parsed = None
+    else:
+        st.session_state.resume_parsed = None
 if "llm_client" not in st.session_state:
     st.session_state.llm_client = None
 if "jobs_found" not in st.session_state:

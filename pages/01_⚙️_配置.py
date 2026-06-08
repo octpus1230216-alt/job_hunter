@@ -77,6 +77,11 @@ with tab1:
                     result = parser.parse(str(resume_path), llm)
                     st.session_state.resume_parsed = result
                     st.session_state.resume_path = str(resume_path)
+                    # 自动保存到本地，下次打开自动加载
+                    import json
+                    resume_cache = Path(__file__).parent.parent / "data" / "resume_parsed.json"
+                    with open(resume_cache, "w", encoding="utf-8") as f:
+                        json.dump(result, f, ensure_ascii=False, indent=2)
                     status.update(label="解析完成！", state="complete")
                     st.success("简历解析成功！")
                     st.rerun()
