@@ -1,314 +1,488 @@
 """
-发现页面 — 职位搜索 + 公司发现 + JD粘贴
+发现职位 — AI 职业定位 → 多渠道搜索 → 审核挑选（一体化）
 """
 
 import streamlit as st
 import pandas as pd
+import json
 from pathlib import Path
 from datetime import datetime
 
-
 st.title("🔍 发现职位")
 
-tab1, tab2, tab3 = st.tabs(["🌍 海外平台搜索", "🏢 公司发现与扩展", "📋 手动粘贴JD"])
+if not st.session_state.get("resume_parsed"):
+    st.info("👋 请先在 ⚙️ 配置页面上传简历，然后回到这里开始职业定位")
+    st.stop()
+
+if not st.session_state.get("llm_client"):
+    st.warning("⚠️ 请先在 ⚙️ 配置页面设置 API Key")
+    st.stop()
 
 # ============================================================
-# Tab 1: 海外平台搜索 (JobSpy)
+# State 初始化
 # ============================================================
+if "career_report" not in st.session_state:
+    # 尝试加载已有报告
+    from modules.career_advisor import CareerAdvisor
+    advisor = CareerAdvisor(st.session_state.llm_client)
+    cached = advisor.load_latest_report()
+    st.session_state.career_report = cached if cached else None
+
+if "all_jobs" not in st.session_state:
+    st.session_state.all_jobs = []
+
+# ============================================================
+# Step 1: AI 职业定位
+# ============================================================
+st.markdown("---")
+st.subheader("🎯 Step 1: AI 职业定位")
+
+if st.session_state.career_report and not st.session_state.career_report.get("error"):
+    report = st.session_state.career_report
+    st.success(f"✅ 已有定位报告（生成于 {report.get('generated_at', '?')[:19]}）")
+
+    with st.expander("查看 / 编辑定位报告", expanded=False):
+        _render_report_editor(report)
+
+    if st.button("🔄 重新生成定位报告", use_container_width=True):
+        with st.status("AI 正在分析你的简历...", expanded=True) as status:
+            try:
+                from modules.career_advisor import CareerAdvisor
+                advisor = CareerAdvisor(st.session_state.llm_client)
+                config = st.session_state.get("config", {})
+                prefs = config.get("preferences", {})
+
+                st.write("🔬 拆解能力结构...")
+                st.write("🔄 分析可迁移方向...")
+                st.write("🔍 生成双语搜索关键词...")
+
+                report = advisor.analyze(
+                    st.session_state.resume_parsed,
+                    preferences=prefs,
+                    salary_stance="no_decrease",
+                )
+                advisor.save_report(report)
+                st.session_state.career_report = report
+                st.session_state.all_jobs = []  # 清空旧结果
+                status.update(label="定位报告生成完成！", state="complete")
+                st.rerun()
+            except Exception as e:
+                status.update(label="生成失败", state="error")
+                st.error(f"生成失败: {str(e)[:200]}")
+
+else:
+    st.info("还没有职业定位报告。点击下方按钮，AI 会分析你的简历并给出职业建议。")
+
+    if st.button("🚀 开始 AI 职业定位", use_container_width=True, type="primary"):
+        with st.status("AI 正在深入分析你的简历...", expanded=True) as status:
+            try:
+                from modules.career_advisor import CareerAdvisor
+                advisor = CareerAdvisor(st.session_state.llm_client)
+                config = st.session_state.get("config", {})
+                prefs = config.get("preferences", {})
+
+                st.write("🔬 拆解能力结构...")
+                st.write("🔄 分析可迁移方向...")
+                st.write("🔍 生成双语搜索关键词...")
+                st.write("💰 估计市场薪资...")
+
+                report = advisor.analyze(
+                    st.session_state.resume_parsed,
+                    preferences=prefs,
+                    salary_stance="no_decrease",
+                )
+                advisor.save_report(report)
+                st.session_state.career_report = report
+                status.update(label="定位报告生成完成！", state="complete")
+                st.success("AI 职业定位完成！向下滚动查看搜索选项。")
+            except Exception as e:
+                status.update(label="生成失败", state="error")
+                st.error(f"AI 分析失败: {str(e)[:200]}")
+                st.info("请检查 API 配置是否正确，或稍后重试")
+
+# ============================================================
+# Step 2: 多渠道搜索
+# ============================================================
+if not st.session_state.career_report or st.session_state.career_report.get("error"):
+    st.stop()
+
+report = st.session_state.career_report
+
+st.markdown("---")
+st.subheader("🔎 Step 2: 搜索职位")
+
+tab1, tab2, tab3 = st.tabs(["🌍 海外平台自动搜索", "🏠 国内平台直达搜索", "📋 手动粘贴 JD"])
+
+# ---- Tab 1: 海外平台 ----
 with tab1:
-    st.subheader("🔗 搜索海外招聘平台")
-    st.caption("支持: LinkedIn, Indeed, Glassdoor, Google Jobs, ZipRecruiter")
+    st.markdown("**使用 JobSpy 自动搜索 LinkedIn / Indeed 等海外平台**")
 
-    config = st.session_state.get("config", {})
-    discovery_config = config.get("discovery", {}).get("overseas", {})
+    keywords_en = report.get("search_keywords", {}).get("en", {})
+    default_keywords = keywords_en.get("core", []) + keywords_en.get("transferable", [])
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
     with col1:
         search_terms = st.text_area(
-            "搜索关键词（一行一个）",
-            value="\n".join(discovery_config.get("search_terms", ["software engineer"])),
-            height=120,
-            help="使用英文关键词效果更好"
+            "英文搜索关键词（每行一个，基于AI定位生成）",
+            value="\n".join(default_keywords[:10]) if default_keywords else "software engineer",
+            height=150,
+            help="可以直接使用AI生成的关键词，也可以自行修改"
         )
     with col2:
-        countries = st.multiselect(
-            "目标国家",
-            ["US", "GB", "DE", "SG", "JP", "CA", "AU", "NL", "SE", "CH"],
-            default=discovery_config.get("countries", ["US"]),
-        )
-        hours_old = st.slider("发布时间范围（小时）", 24, 720, discovery_config.get("hours_old", 168), 24)
-        max_results = st.number_input("每平台最多结果", 20, 500, discovery_config.get("max_results", 200), 20)
+        countries = st.multiselect("目标国家", ["US", "GB", "DE", "SG", "JP", "CA", "AU", "NL"],
+                                    default=["US"])
+        hours_old = st.slider("发布时间（小时）", 24, 720, 168, 24)
+        platforms = st.multiselect("平台", ["indeed", "linkedin", "glassdoor", "google"],
+                                    default=["indeed"],
+                                    format_func=lambda x: {"indeed": "Indeed", "linkedin": "LinkedIn",
+                                        "glassdoor": "Glassdoor", "google": "Google Jobs"}[x])
 
-    platforms_available = {
-        "indeed": "Indeed（反爬最宽松）",
-        "linkedin": "LinkedIn（需要代理）",
-        "glassdoor": "Glassdoor",
-        "google": "Google Jobs",
-        "ziprecruiter": "ZipRecruiter",
-    }
-
-    platforms = st.multiselect(
-        "选择平台",
-        list(platforms_available.keys()),
-        default=["indeed"],
-        format_func=lambda x: platforms_available[x],
-    )
-
-    proxy = st.text_input("代理地址（LinkedIn推荐配置）", placeholder="http://user:pass@ip:port")
-
-    if st.button("🚀 开始搜索", use_container_width=True, type="primary"):
-        if not st.session_state.get("llm_client"):
-            st.error("请先在配置页面设置API")
+    if st.button("🚀 开始海外搜索", use_container_width=True, type="primary", key="btn_overseas"):
+        terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
+        if not terms:
+            st.error("请输入至少一个搜索关键词")
         else:
-            with st.spinner("正在搜索..."):
+            with st.status("正在搜索海外平台...", expanded=True) as status:
                 try:
-                    from modules.discovery.overseas import OverseasJobDiscovery
-                    terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
+                    from jobspy import scrape_jobs
 
-                    discovery = OverseasJobDiscovery(
-                        config={
-                            "search_terms": terms,
-                            "countries": countries,
-                            "hours_old": hours_old,
-                            "max_results": max_results,
-                            "proxy": proxy,
-                        }
-                    )
+                    all_results = []
+                    total_terms = len(terms) * len(countries) * len(platforms)
+                    count = 0
 
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+                    for term in terms[:3]:  # 限制搜索数量避免过慢
+                        for country in countries[:3]:
+                            for platform in platforms[:2]:
+                                count += 1
+                                st.write(f"🔍 ({count}/{min(total_terms, 18)}) {platform}: {term} in {country}")
 
-                    def progress(msg):
-                        status_text.text(msg)
+                                try:
+                                    kwargs = {
+                                        "site_name": platform,
+                                        "search_term": term,
+                                        "results_wanted": 50,
+                                        "hours_old": hours_old,
+                                        "country_indeed": country,
+                                    }
+                                    if platform == "google":
+                                        kwargs["google_search_term"] = f"{term} jobs"
 
-                    status_text.text("正在初始化...")
-                    progress_bar.progress(0.1)
+                                    df = scrape_jobs(**kwargs)
+                                    if df is not None and not df.empty:
+                                        df["source_platform"] = platform
+                                        df["source_country"] = country
+                                        all_results.append(df)
+                                except Exception as e:
+                                    st.write(f"  ⚠️ 跳过: {str(e)[:80]}")
 
-                    df = discovery.search_all(
-                        search_terms=terms,
-                        countries=countries,
-                        hours_old=hours_old,
-                        platforms=platforms,
-                        progress_callback=progress,
-                    )
+                    if all_results:
+                        combined = pd.concat(all_results, ignore_index=True)
+                        combined = combined.drop_duplicates(subset=["job_url"], keep="first")
+                        st.session_state.jobs_df = combined
 
-                    if df is not None and not df.empty:
-                        saved = discovery.save_results(df)
-                        st.session_state.jobs_df = df
-                        st.session_state.jobs_found = df.to_dict("records")
-                        progress_bar.progress(1.0)
-                        status_text.text(f"搜索完成！找到 {len(df)} 个职位")
-                        st.success(f"找到 {len(df)} 个职位，已保存")
-                        st.dataframe(df[["title", "company", "location", "source_platform"]].head(20))
+                        # 立即匹配
+                        st.write("🧠 正在计算匹配度...")
+                        new_jobs = _match_jobs(combined, st.session_state.resume_parsed,
+                                              st.session_state.llm_client,
+                                              report)
+
+                        # 合并到 all_jobs
+                        st.session_state.all_jobs = new_jobs + [
+                            j for j in st.session_state.all_jobs
+                            if j.get("source_platform") not in platforms
+                        ]
+                        status.update(label=f"搜索完成！找到 {len(new_jobs)} 个职位", state="complete")
+                        st.success(f"共找到 {len(new_jobs)} 个职位")
                     else:
-                        progress_bar.progress(1.0)
-                        status_text.text("未找到职位")
+                        status.update(label="未找到结果", state="complete")
                         st.warning("未找到匹配的职位，尝试更换关键词或平台")
 
-                except ImportError as e:
-                    st.error(f"缺少依赖: {e}。请先运行: pip install python-jobspy")
+                except ImportError:
+                    status.update(label="缺少依赖", state="error")
+                    st.error("缺少 JobSpy 依赖。请运行: pip install python-jobspy tls_client markdownify regex")
                 except Exception as e:
-                    st.error(f"搜索失败: {e}")
+                    status.update(label="搜索失败", state="error")
+                    st.error(f"搜索失败: {str(e)[:200]}")
 
-    # 显示已有结果
-    if st.session_state.get("jobs_found"):
-        st.markdown("---")
-        st.subheader(f"📊 已发现 {len(st.session_state.jobs_found)} 个职位")
-        df = pd.DataFrame(st.session_state.jobs_found)
-        if "source_platform" in df.columns:
-            st.bar_chart(df["source_platform"].value_counts())
-
-# ============================================================
-# Tab 2: 公司发现与扩展
-# ============================================================
+# ---- Tab 2: 国内平台直达搜索 ----
 with tab2:
-    st.subheader("🏢 AI公司发现")
-    st.caption("从已知公司出发，通过AI扩展发现更多值得投递的公司")
+    st.markdown("**AI 会生成直达搜索链接，点击即可跳转到招聘平台**")
+    st.caption("浏览器脚本（浏览即收集）将在下一批更新中加入")
 
-    config = st.session_state.get("config", {})
-    prefs = config.get("preferences", {})
-    discovery_config = config.get("discovery", {}).get("company_discovery", {})
+    keywords_zh = report.get("search_keywords", {}).get("zh", {})
+    core_kw = keywords_zh.get("core", [])
+    trans_kw = keywords_zh.get("transferable", [])
 
-    col1, col2 = st.columns(2)
-    with col1:
-        depth = st.selectbox(
-            "搜索深度",
-            ["basic", "medium", "deep"],
-            index=["basic", "medium", "deep"].index(discovery_config.get("depth", "medium")),
-            format_func=lambda x: {"basic": "基础（仅榜单）", "medium": "中等（榜单+相似公司，推荐）", "deep": "深入（榜单+相似+行业全扫）"} [x],
+    if core_kw or trans_kw:
+        st.markdown("### 🔗 直达搜索链接")
+
+        if core_kw:
+            st.markdown("**核心方向：**")
+            for kw in core_kw:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    url = f"https://www.zhipin.com/web/geek/job?query={kw}"
+                    st.markdown(f"[🔍 Boss直聘 — {kw}]({url})")
+                with col_b:
+                    url2 = f"https://www.liepin.com/zhaopin/?key={kw}"
+                    st.markdown(f"[🔍 猎聘 — {kw}]({url2})")
+
+        if trans_kw:
+            st.markdown("**可迁移方向：**")
+            for kw in trans_kw:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    url = f"https://www.zhipin.com/web/geek/job?query={kw}"
+                    st.markdown(f"[🔍 Boss直聘 — {kw}]({url})")
+                with col_b:
+                    url2 = f"https://www.liepin.com/zhaopin/?key={kw}"
+                    st.markdown(f"[🔍 猎聘 — {kw}]({url2})")
+
+        st.info(
+            "找到感兴趣的职位后，复制 JD 内容，粘贴到右侧「📋 手动粘贴 JD」标签页，"
+            "AI 会自动计算匹配度并生成定制简历。"
         )
-    with col2:
-        existing_companies = st.text_area(
-            "已知公司（一行一个，可选）",
-            placeholder="Google\nMicrosoft\nApple",
-            height=120,
-            help="可以用从海外搜索中提取的公司，也可以手写"
-        )
+    else:
+        st.info("AI 定位报告中没有搜索关键词，请先生成定位报告")
 
-    st.markdown("---")
-    st.markdown("**发现策略**：")
-
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.info("**第1层: 职位提取**\n从搜索结果的JD中自动提取公司名")
-    with col_b:
-        st.info("**第2层: AI扩展**\nLLM根据行业和已有公司推荐同类公司")
-    with col_c:
-        st.info("**第3层: 榜单搜索**\n搜索行业榜单、最佳雇主、高增长公司")
-
-    if st.button("🔎 开始公司发现", use_container_width=True, type="primary"):
-        if not st.session_state.get("llm_client"):
-            st.error("请先在配置页面设置API")
-        else:
-            with st.spinner("AI正在发现和扩展公司列表..."):
-                try:
-                    from modules.discovery.company_finder import CompanyFinder
-
-                    llm = st.session_state.llm_client
-
-                    # 提取已有公司
-                    existing = [c.strip() for c in existing_companies.split("\n") if c.strip()]
-                    if st.session_state.get("jobs_df") is not None:
-                        cf_temp = CompanyFinder({"company_discovery": discovery_config}, llm)
-                        job_companies = cf_temp.extract_from_jobs(st.session_state.jobs_df)
-                        existing = list(set(existing + job_companies))
-
-                    finder = CompanyFinder({"company_discovery": {"depth": depth}}, llm)
-
-                    result = finder.discover_all(
-                        existing_jobs_df=st.session_state.get("jobs_df"),
-                        industries=prefs.get("industries", []),
-                        locations=prefs.get("locations", []),
-                        existing_companies=existing,
-                    )
-
-                    st.session_state.discovered_companies = result
-                    st.success(f"发现 {result['total_found']} 家公司！")
-
-                    col_x, col_y, col_z = st.columns(3)
-                    col_x.metric("从职位提取", result["by_source"]["extracted"])
-                    col_y.metric("AI扩展", result["by_source"]["llm_expanded"])
-                    col_z.metric("网络搜索", result["by_source"]["web_search"])
-
-                except Exception as e:
-                    st.error(f"公司发现失败: {e}")
-
-    # 显示已发现公司
-    if st.session_state.get("discovered_companies"):
-        companies = st.session_state.discovered_companies.get("companies", [])
-        if companies:
-            st.markdown("---")
-            st.subheader(f"已发现 {len(companies)} 家公司")
-
-            df_companies = pd.DataFrame(companies)
-            st.dataframe(df_companies, use_container_width=True)
-
-# ============================================================
-# Tab 3: 手动粘贴JD
-# ============================================================
+# ---- Tab 3: 手动粘贴 JD ----
 with tab3:
-    st.subheader("📋 手动粘贴 JD")
-    st.caption("把你从任何平台找到的岗位JD粘贴到这里，AI会自动解析并匹配")
+    st.markdown("**粘贴任意平台的 JD，AI 自动解析 + 匹配 + 标注行业类型**")
 
-    col1, col2 = st.columns([3, 2])
-    with col1:
-        jd_text = st.text_area(
-            "粘贴 JD 内容",
-            height=300,
-            placeholder="直接把岗位描述的全文粘贴在这里...\n\n包括：公司名、职位名、职责、要求等",
-            help="支持任意格式，AI会自动提取关键信息"
-        )
-    with col2:
-        company_name = st.text_input("公司名（如果JD中没有）", placeholder="可选，留空则AI自动提取")
-        job_title = st.text_input("职位名（如果JD中没有）", placeholder="可选，留空则AI自动提取")
-        source = st.text_input("来源", placeholder="例如：Boss直聘、猎聘、朋友推荐")
+    with st.form("paste_jd"):
+        jd_text = st.text_area("粘贴 JD 内容", height=250, placeholder="把岗位描述全文粘贴在这里...")
+        company_override = st.text_input("公司名（留空则AI自动提取）", placeholder="可选")
+        title_override = st.text_input("职位名（留空则AI自动提取）", placeholder="可选")
 
-    if st.button("🔍 解析并匹配", use_container_width=True, type="primary", disabled=not jd_text.strip()):
-        if not st.session_state.get("llm_client"):
-            st.error("请先在配置页面设置API")
-        elif not st.session_state.get("resume_parsed"):
-            st.error("请先在配置页面上传简历")
-        else:
-            with st.spinner("AI正在解析JD并计算匹配度..."):
+        submitted = st.form_submit_button("🔍 解析并匹配", use_container_width=True, type="primary")
+
+        if submitted and jd_text.strip():
+            with st.status("正在分析...", expanded=True) as status:
                 try:
                     llm = st.session_state.llm_client
 
-                    # 解析JD
-                    parse_prompt = f"""解析以下职位描述，提取关键信息。返回JSON：
-{{
+                    # 解析 JD
+                    parse_prompt = """解析以下职位描述为 JSON：
+{
   "company": "公司名",
   "title": "职位名",
-  "location": "工作地点",
-  "description": "职位描述摘要（保留关键信息，约500字）",
+  "location": "地点",
+  "description": "JD摘要（500字）",
   "required_skills": ["必需技能"],
-  "preferred_skills": ["加分技能"],
-  "responsibilities": ["主要职责"],
-  "salary_range": "薪资范围（如果有）"
-}}"""
-
-                    if company_name:
-                        parse_prompt += f"\n\n已知公司名: {company_name}"
-                    if job_title:
-                        parse_prompt += f"\n已知职位: {job_title}"
+  "preferred_skills": ["加分技能"]
+}"""
 
                     jd_parsed = llm.chat_json(parse_prompt, jd_text)
-                    jd_parsed["source"] = source or "手动粘贴"
-                    jd_parsed["job_url"] = ""
+                    if company_override:
+                        jd_parsed["company"] = company_override
+                    if title_override:
+                        jd_parsed["title"] = title_override
+                    jd_parsed["source"] = "手动粘贴"
+                    jd_parsed["source_platform"] = "manual"
                     jd_parsed["discovered_at"] = datetime.now().isoformat()
 
                     # 匹配
+                    st.write("🧠 计算匹配度...")
                     from modules.matcher import JobMatcher
                     matcher = JobMatcher(llm)
-                    match_result = matcher.match_single(
-                        st.session_state.resume_parsed,
-                        jd_parsed,
-                        config.get("preferences", {}),
+                    match = matcher.match_single(
+                        st.session_state.resume_parsed, jd_parsed,
+                        st.session_state.get("config", {}).get("preferences", {}),
                     )
 
-                    # 保存到session
-                    if "manual_jobs" not in st.session_state:
-                        st.session_state.manual_jobs = []
-                    st.session_state.manual_jobs.append({
-                        "job": jd_parsed,
-                        "match": match_result,
-                    })
+                    # 判断行业类型
+                    industry_tag = _classify_industry(jd_parsed, report)
 
-                    # 显示结果
-                    st.success(f"解析完成！匹配度: {match_result.get('overall_score', 0)}/100")
+                    job_entry = {**jd_parsed, "_match": match, "_industry_tag": industry_tag}
 
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.markdown("### JD解析结果")
-                        st.markdown(f"**公司:** {jd_parsed.get('company', 'N/A')}")
-                        st.markdown(f"**职位:** {jd_parsed.get('title', 'N/A')}")
-                        st.markdown(f"**地点:** {jd_parsed.get('location', 'N/A')}")
-                        if jd_parsed.get("salary_range"):
-                            st.markdown(f"**薪资:** {jd_parsed['salary_range']}")
-                        st.markdown(f"**必需技能:** {', '.join(jd_parsed.get('required_skills', []))}")
+                    # 去重后加入
+                    existing_urls = {j.get("job_url", "") for j in st.session_state.all_jobs}
+                    if jd_parsed.get("job_url", "") not in existing_urls or not jd_parsed.get("job_url"):
+                        st.session_state.all_jobs.insert(0, job_entry)
 
-                    with col_b:
-                        st.markdown("### 匹配分析")
-                        score = match_result.get("overall_score", 0)
-                        if score >= 80:
-                            st.success(f"总分: {score} — 强匹配！")
-                        elif score >= 60:
-                            st.info(f"总分: {score} — 中等匹配")
-                        else:
-                            st.warning(f"总分: {score} — 较弱匹配")
-
-                        st.markdown(f"**优势:** {', '.join(match_result.get('strengths', []))}")
-                        st.markdown(f"**不足:** {', '.join(match_result.get('weaknesses', []))}")
-                        st.markdown(f"**建议:** {match_result.get('recommendation', '')}")
+                    status.update(label="解析完成", state="complete")
+                    st.success(f"匹配度: {match.get('overall_score', 0)}/100 | 标签: {industry_tag}")
+                    st.json(match)
 
                 except Exception as e:
-                    st.error(f"解析失败: {e}")
+                    status.update(label="解析失败", state="error")
+                    st.error(f"解析失败: {str(e)[:200]}")
 
-    # 显示手动粘贴的历史
-    if st.session_state.get("manual_jobs"):
+# ============================================================
+# Step 3: 审核挑选
+# ============================================================
+if st.session_state.all_jobs:
+    st.markdown("---")
+    st.subheader(f"📊 Step 3: 审核挑选（共 {len(st.session_state.all_jobs)} 个）")
+
+    # 筛选
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        industry_filter = st.selectbox("行业标签", ["全部", "🔵 核心行业", "🟢 可迁移", "🟡 探索"])
+    with col2:
+        channel_filter = st.selectbox("来源渠道", ["全部", "海外平台", "手动粘贴"])
+    with col3:
+        sort_by = st.selectbox("排序", ["按匹配度", "按时间"])
+
+    # 构建展示列表
+    display_jobs = _filter_jobs(st.session_state.all_jobs, industry_filter, channel_filter, sort_by)
+
+    # 按行业标签分组显示
+    if "selected_indices" not in st.session_state:
+        st.session_state.selected_indices = []
+
+    for i, job in enumerate(display_jobs):
+        tag = job.get("_industry_tag", "探索")
+        tag_emoji = {"核心行业": "🔵", "可迁移": "🟢", "探索": "🟡"}.get(tag, "🟡")
+        match_data = job.get("_match", {})
+        score = match_data.get("overall_score", "?")
+
+        with st.expander(
+            f"{tag_emoji} [{score}分] {job.get('company', '?')} — {job.get('title', '?')} "
+            f"({job.get('location', '')})"
+        ):
+            col_a, col_b = st.columns([6, 2])
+            with col_a:
+                desc = job.get("description", "")
+                if desc:
+                    st.markdown(desc[:500] + ("..." if len(desc) > 500 else ""))
+                if job.get("job_url"):
+                    st.markdown(f"[🔗 查看原文]({job.get('job_url')})")
+                if match_data.get("strengths"):
+                    st.markdown(f"**优势:** {', '.join(match_data.get('strengths', []))}")
+                if match_data.get("weaknesses"):
+                    st.markdown(f"**注意:** {', '.join(match_data.get('weaknesses', []))}")
+
+            with col_b:
+                if i in st.session_state.selected_indices:
+                    if st.button("↩️ 取消", key=f"unsel_{i}", use_container_width=True):
+                        st.session_state.selected_indices.remove(i)
+                        st.rerun()
+                else:
+                    if st.button("✅ 选择投递", key=f"sel_{i}", use_container_width=True):
+                        st.session_state.selected_indices.append(i)
+                        st.rerun()
+
+    # 已选汇总
+    if st.session_state.selected_indices:
         st.markdown("---")
-        st.subheader(f"📋 已粘贴 {len(st.session_state.manual_jobs)} 个岗位")
+        st.subheader(f"✅ 已选 {len(st.session_state.selected_indices)} 个岗位")
 
-        for i, item in enumerate(st.session_state.manual_jobs):
-            with st.expander(f"#{i+1} {item['job'].get('company', '?')} - {item['job'].get('title', '?')} "
-                             f"(匹配度: {item['match'].get('overall_score', 0)})"):
-                st.json(item)
+        selected = [display_jobs[i] for i in st.session_state.selected_indices]
+        for s in selected:
+            st.markdown(f"- **{s.get('company')}** — {s.get('title')}")
+
+        if st.button("🚀 确认选择，去生成简历", use_container_width=True, type="primary"):
+            # 构造标准格式传给生成页
+            st.session_state.selected_jobs = [
+                {"company": s.get("company", ""), "title": s.get("title", ""),
+                 "location": s.get("location", ""), "description": s.get("description", ""),
+                 "source_platform": s.get("source_platform", ""),
+                 "_match_score": s.get("_match", {}).get("overall_score", 0),
+                 "job_url": s.get("job_url", "")}
+                for s in selected
+            ]
+            st.success(f"已选择 {len(selected)} 个岗位，请前往「✨ 生成简历」页面")
+            st.switch_page("pages/04_✨_生成简历.py")
+
+
+# ============================================================
+# 辅助函数
+# ============================================================
+def _render_report_editor(report):
+    """渲染可编辑的定位报告"""
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 🎯 核心方向")
+        for d in report.get("core_directions", []):
+            st.markdown(f"**{d.get('role', '')}** — 匹配度 {d.get('match_score', 0)}")
+            st.caption(d.get("reason", ""))
+            st.caption(f"优势: {', '.join(d.get('key_strengths', []))}")
+
+    with col2:
+        st.markdown("### 🔄 可迁移方向")
+        for d in report.get("transferable_directions", []):
+            st.markdown(f"**{d.get('role', '')}** → {d.get('new_industry', '')}")
+            st.caption(f"可迁移度: {d.get('transferability_score', 0)}")
+            st.caption(f"可复用: {', '.join(d.get('transferable_skills', []))}")
+            st.caption(f"需补充: {', '.join(d.get('skill_gaps', []))}")
+
+    st.markdown("### ⚠️ 弱项提醒")
+    for w in report.get("weakness_alerts", []):
+        sev = w.get("severity", "low")
+        icon = "🔴" if sev == "high" else "🟡" if sev == "medium" else "🟢"
+        st.markdown(f"{icon} **{w.get('area', '')}**: {w.get('description', '')}")
+
+    st.markdown("### 💰 薪资锚定")
+    salary = report.get("salary_anchor", {})
+    if salary:
+        st.markdown(f"- 当前估计: {salary.get('current_estimated_range', 'N/A')}")
+        st.markdown(f"- 核心方向: {salary.get('core_direction_range', 'N/A')}")
+        st.markdown(f"- 可迁移方向: {salary.get('transferable_range', 'N/A')}")
+
+    st.markdown("### 🔍 搜索关键词")
+    kw = report.get("search_keywords", {})
+    st.markdown(f"**中文:** {', '.join(kw.get('zh', {}).get('core', []) + kw.get('zh', {}).get('transferable', []))}")
+    st.markdown(f"**English:** {', '.join(kw.get('en', {}).get('core', []) + kw.get('en', {}).get('transferable', []))}")
+
+
+def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list:
+    """对搜索结果进行即时匹配"""
+    from modules.matcher import JobMatcher
+
+    matcher = JobMatcher(llm_client)
+    results = []
+
+    jobs = jobs_df.head(max_jobs).to_dict("records")
+    for job in jobs:
+        # 简单预过滤：跳过明显不相关的
+        match = matcher.match_single(resume, job)
+        tag = _classify_industry(job, report)
+        results.append({**job, "_match": match, "_industry_tag": tag})
+
+    # 按匹配度排序
+    results.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+    return results
+
+
+def _classify_industry(job: dict, report: dict) -> str:
+    """判断岗位属于核心/可迁移/探索"""
+    title = job.get("title", "").lower()
+    desc = job.get("description", "").lower()[:500]
+
+    # 检查核心方向关键词
+    for d in report.get("core_directions", []):
+        role = d.get("role", "").lower()
+        if role and (role in title or role in desc):
+            return "核心行业"
+
+    # 检查可迁移方向关键词
+    for d in report.get("transferable_directions", []):
+        role = d.get("role", "").lower()
+        if role and (role in title or role in desc):
+            return "可迁移"
+
+    return "探索"
+
+
+def _filter_jobs(all_jobs: list, industry_filter: str, channel_filter: str, sort_by: str) -> list:
+    """筛选和排序"""
+    result = list(all_jobs)
+
+    if industry_filter != "全部":
+        tag_map = {"🔵 核心行业": "核心行业", "🟢 可迁移": "可迁移", "🟡 探索": "探索"}
+        target_tag = tag_map.get(industry_filter, industry_filter)
+        result = [j for j in result if j.get("_industry_tag", "") == target_tag]
+
+    if channel_filter != "全部":
+        if channel_filter == "海外平台":
+            result = [j for j in result if j.get("source_platform") not in ("manual", None, "")]
+        elif channel_filter == "手动粘贴":
+            result = [j for j in result if j.get("source_platform") == "manual"]
+
+    if sort_by == "按匹配度":
+        result.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+    else:
+        result.reverse()  # 最新的在前面
+
+    return result

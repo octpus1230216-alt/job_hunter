@@ -8,6 +8,30 @@ from pathlib import Path
 from datetime import datetime
 
 
+QUICK_CARD_PROMPT = """你是一位面试辅导专家。根据候选人的简历和目标岗位，生成一份"投递速查卡"。
+
+速查卡帮助候选人在投递和面试时快速获取关键信息。
+
+规则：
+1. 所有内容必须基于真实信息，不要编造
+2. 语言简洁有力，适合复制粘贴到申请表中
+3. 如果要求双语，同时提供中英文版本
+
+返回 JSON：
+{
+  "one_liner": "一句话自我介绍（中文，20字以内）",
+  "one_liner_en": "English one-liner (if bilingual)",
+  "why_company": "为什么选择这家公司（中文，适合填申请表）",
+  "why_company_en": "English version (if bilingual)",
+  "salary_expectation": "建议的期望薪资及理由",
+  "weak_spots": [
+    {"area": "薄弱点", "how_to_handle": "面试时如何应对"}
+  ],
+  "questions_to_ask": ["面试时可以反问的问题（展示你的深度思考）"],
+  "differentiators": ["你比其他候选人的独特优势"]
+}"""
+
+
 class ResumeGenerator:
     """简历和 Cover Letter 生成器"""
 
@@ -179,10 +203,11 @@ JD摘要：
         return filepath
 
     def generate_all(self, resume: dict, job: dict, bilingual: bool = True) -> dict:
-        """一键生成：风格分析 -> 定制简历 -> Cover Letter（双语）"""
+        """一键生成：风格分析 -> 定制简历 -> Cover Letter + 投递速查卡（双语）"""
         style_result = self.style_analyzer.analyze(job)
         customized = self.generate_resume(resume, job, style_result, bilingual)
         cover_letter = self.generate_cover_letter(resume, job, style_result, bilingual)
+        quick_card = self.generate_quick_card(resume, job, style_result, bilingual)
 
         # 保存文件
         if bilingual:
@@ -199,9 +224,39 @@ JD摘要：
             "style": style_result,
             "customized_resume": customized,
             "cover_letter": cover_letter,
+            "quick_card": quick_card,
             "resume_files": resume_files,
             "cover_letter_file": str(cl_path),
         }
+
+    def generate_quick_card(self, resume: dict, job: dict,
+                            style_result: dict = None, bilingual: bool = True) -> dict:
+        """生成投递速查卡"""
+        if style_result is None:
+            style_result = self.style_analyzer.analyze(job)
+
+        job_desc = job.get("description", "")[:1500]
+
+        lang_instruction = ""
+        if bilingual:
+            lang_instruction = "\n请同时生成中文和英文两个版本。"
+
+        user_prompt = f"""请为目标岗位生成投递速查卡。{lang_instruction}
+
+=== 候选人信息 ===
+姓名：{resume.get('name', '')}
+核心技能：{self._extract_key_skills(resume)}
+
+=== 目标岗位 ===
+公司：{job.get('company', '')}
+职位：{job.get('title', '')}
+JD：
+{job_desc}"""
+
+        try:
+            return self.llm.chat_json(QUICK_CARD_PROMPT, user_prompt)
+        except Exception:
+            return {"error": "速查卡生成失败"}
 
     def _extract_key_skills(self, resume: dict) -> str:
         skills = resume.get("skills", {})

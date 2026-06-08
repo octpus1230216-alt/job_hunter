@@ -188,6 +188,43 @@ for i, job in enumerate(selected_jobs):
                         key=f"dl_cl_{i}",
                     )
 
+            # 投递速查卡
+            quick_card = result.get("quick_card", {})
+            if quick_card and not quick_card.get("error"):
+                with st.expander("📋 投递速查卡（面试/填表时直接复制）", expanded=False):
+                    if quick_card.get("one_liner"):
+                        st.markdown("### 💬 一句话自我介绍")
+                        st.code(quick_card.get("one_liner", ""), language=None)
+                        if quick_card.get("one_liner_en"):
+                            st.caption("English:")
+                            st.code(quick_card.get("one_liner_en", ""), language=None)
+
+                    if quick_card.get("why_company"):
+                        st.markdown("### 🏢 为什么选择这家公司")
+                        st.markdown(quick_card.get("why_company", ""))
+                        if quick_card.get("why_company_en"):
+                            st.caption("English:")
+                            st.markdown(quick_card.get("why_company_en", ""))
+
+                    if quick_card.get("salary_expectation"):
+                        st.markdown(f"### 💰 期望薪资\n{quick_card.get('salary_expectation', '')}")
+
+                    if quick_card.get("weak_spots"):
+                        st.markdown("### ⚠️ 面试薄弱点应对")
+                        for spot in quick_card.get("weak_spots", []):
+                            st.markdown(f"**{spot.get('area', '')}**")
+                            st.caption(f"应对: {spot.get('how_to_handle', '')}")
+
+                    if quick_card.get("questions_to_ask"):
+                        st.markdown("### ❓ 反问面试官的问题")
+                        for q in quick_card.get("questions_to_ask", []):
+                            st.markdown(f"- {q}")
+
+                    if quick_card.get("differentiators"):
+                        st.markdown("### ⭐ 独特优势")
+                        for d in quick_card.get("differentiators", []):
+                            st.markdown(f"- {d}")
+
             # 重新生成按钮
             if st.button(f"🔄 重新生成", key=f"regen_{i}", use_container_width=True):
                 with st.status("重新生成中...", expanded=True) as status:
