@@ -1,27 +1,19 @@
 """
-配置页面 — 上传简历、设置API、偏好配置
+配置页面 — 上传简历、设置API、偏好配置、语言设置
 """
 
+import copy
 import streamlit as st
 import yaml
 from pathlib import Path
 
 
 def save_config(config: dict):
-    """保存配置到文件"""
+    """保存配置到文件并同步到 session state"""
     config_path = Path(__file__).parent.parent / "config.yaml"
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
-
-
-@st.cache_resource
-def get_llm_client():
-    """缓存LLM客户端"""
-    try:
-        from modules.llm import LLMClient
-        return LLMClient()
-    except Exception:
-        return None
+    st.session_state.config = config
 
 
 st.title("⚙️ 配置")
@@ -71,25 +63,29 @@ with tab1:
                     llm = None
                     if use_llm:
                         st.write("🤖 正在连接AI...")
-                        llm = get_llm_client()
+                        llm = st.session_state.get("llm_client")
                         if llm is None:
-                            status.update(label="AI未配置，改用纯文本提取", state="running")
-                            use_llm = False
+                            from modules.llm import LLMClient
+                            try:
+                                llm = LLMClient()
+                                st.session_state.llm_client = llm
+                            except Exception:
+                                status.update(label="AI未配置，改用纯文本提取", state="running")
+                                use_llm = False
 
                     st.write("🔍 正在解析...")
                     result = parser.parse(str(resume_path), llm)
-
                     st.session_state.resume_parsed = result
                     st.session_state.resume_path = str(resume_path)
-
                     status.update(label="解析完成！", state="complete")
                     st.success("简历解析成功！")
                     st.rerun()
 
                 except Exception as e:
-                    status.update(label=f"解析失败", state="error")
+                    status.update(label="解析失败", state="error")
                     st.error(f"解析失败: {str(e)[:200]}")
-                    st.info("💡 提示：如果是AI解析失败，可以试试「仅提取文本」按钮，速度快且更稳定")
+                    if use_llm:
+                        st.info("💡 提示：AI解析失败时，试试「仅提取文本」按钮，速度快且更稳定")
 
     if st.session_state.get("resume_parsed"):
         resume = st.session_state.resume_parsed
@@ -153,10 +149,11 @@ with tab2:
                 config["llm"]["provider"] = "deepseek"
                 config["llm"]["deepseek"] = {"api_key": api_key, "model": model, "base_url": base_url}
                 save_config(config)
-                st.session_state.config = config
-                get_llm_client.clear()  # 清除缓存
+                # 清除缓存并重新初始化
+                st.cache_resource.clear()
                 try:
-                    llm = get_llm_client()
+                    from modules.llm import LLMClient
+                    llm = LLMClient()
                     st.session_state.llm_client = llm
                     resp = llm.chat("你是一个助手。", "回复'连接成功'")
                     st.success(f"✅ 连接成功: {resp[:80]}")
@@ -180,10 +177,10 @@ with tab2:
                 config["llm"]["provider"] = "openai"
                 config["llm"]["openai"] = {"api_key": api_key, "model": model, "base_url": base_url}
                 save_config(config)
-                st.session_state.config = config
-                get_llm_client.clear()
+                st.cache_resource.clear()
                 try:
-                    llm = get_llm_client()
+                    from modules.llm import LLMClient
+                    llm = LLMClient()
                     st.session_state.llm_client = llm
                     resp = llm.chat("你是一个助手。", "回复'连接成功'")
                     st.success(f"✅ 连接成功: {resp[:80]}")
@@ -201,10 +198,10 @@ with tab2:
             config["llm"]["provider"] = "ollama"
             config["llm"]["ollama"] = {"model": model, "base_url": base_url}
             save_config(config)
-            st.session_state.config = config
-            get_llm_client.clear()
+            st.cache_resource.clear()
             try:
-                llm = get_llm_client()
+                from modules.llm import LLMClient
+                llm = LLMClient()
                 st.session_state.llm_client = llm
                 resp = llm.chat("你是一个助手。", "回复'连接成功'")
                 st.success(f"✅ 连接成功: {resp[:80]}")
@@ -217,42 +214,37 @@ with tab2:
 with tab3:
     st.subheader("求职偏好设置")
 
-    config = st.session_state.get("config", {})
+    # 从 session state 深拷贝 config 用于编辑，避免原地修改
+    config = copy.deepcopy(st.session_state.get("config", {}))
     prefs = config.get("preferences", {})
+    reqs = config.get("company_requirements", {})
 
     target_roles = st.text_input(
         "目标职位（逗号分隔）",
         value=", ".join(prefs.get("target_roles", [])),
         help="例如：软件工程师, 后端开发, 全栈工程师"
     )
-    prefs["target_roles"] = [r.strip() for r in target_roles.split(",") if r.strip()]
 
     industries = st.text_input(
         "意向行业（逗号分隔）",
         value=", ".join(prefs.get("industries", [])),
         help="例如：互联网, 人工智能, 金融科技"
     )
-    prefs["industries"] = [i.strip() for i in industries.split(",") if i.strip()]
 
     locations = st.text_input(
         "工作地点（逗号分隔）",
         value=", ".join(prefs.get("locations", [])),
         help="例如：远程, 北京, 上海, US, Singapore"
     )
-    prefs["locations"] = [l.strip() for l in locations.split(",") if l.strip()]
 
     col1, col2 = st.columns(2)
     with col1:
         salary_min = st.number_input("最低薪资（年/¥）", value=prefs.get("salary_min", 0), step=50000)
-        prefs["salary_min"] = salary_min
     with col2:
         salary_max = st.number_input("最高薪资（年/¥）", value=prefs.get("salary_max", 0), step=50000)
-        prefs["salary_max"] = salary_max
 
     st.markdown("---")
     st.subheader("公司要求")
-
-    reqs = config.get("company_requirements", {})
 
     blacklist = st.text_area(
         "公司黑名单（一行一个）",
@@ -260,7 +252,6 @@ with tab3:
         height=100,
         help="绝对不会去的公司"
     )
-    reqs["blacklist"] = [b.strip() for b in blacklist.split("\n") if b.strip()]
 
     whitelist = st.text_area(
         "公司白名单（一行一个）",
@@ -268,21 +259,27 @@ with tab3:
         height=100,
         help="优先考虑的公司"
     )
-    reqs["whitelist"] = [w.strip() for w in whitelist.split("\n") if w.strip()]
 
     col3, col4 = st.columns(2)
     with col3:
         accept_startups = st.checkbox("接受创业公司", value=reqs.get("accept_startups", True))
-        reqs["accept_startups"] = accept_startups
     with col4:
         accept_outsourcing = st.checkbox("接受外包/派遣", value=reqs.get("accept_outsourcing", False))
-        reqs["accept_outsourcing"] = accept_outsourcing
 
     if st.button("💾 保存偏好设置", use_container_width=True, type="primary"):
+        # 只在按钮点击时才更新 config
+        prefs["target_roles"] = [r.strip() for r in target_roles.split(",") if r.strip()]
+        prefs["industries"] = [i.strip() for i in industries.split(",") if i.strip()]
+        prefs["locations"] = [l.strip() for l in locations.split(",") if l.strip()]
+        prefs["salary_min"] = salary_min
+        prefs["salary_max"] = salary_max
+        reqs["blacklist"] = [b.strip() for b in blacklist.split("\n") if b.strip()]
+        reqs["whitelist"] = [w.strip() for w in whitelist.split("\n") if w.strip()]
+        reqs["accept_startups"] = accept_startups
+        reqs["accept_outsourcing"] = accept_outsourcing
         config["preferences"] = prefs
         config["company_requirements"] = reqs
         save_config(config)
-        st.session_state.config = config
         st.success("偏好设置已保存！")
 
 # ============================================================
@@ -292,29 +289,31 @@ with tab4:
     st.subheader("语言偏好")
     st.caption("设置简历和求职信的默认语言")
 
-    config = st.session_state.get("config", {})
-    output_config = config.get("output", {})
+    output_config = st.session_state.get("config", {}).get("output", {})
+    # 读取旧值用于显示
+    bilingual_val = output_config.get("bilingual", True)
+    default_lang_val = output_config.get("default_language", "zh")
 
     bilingual = st.checkbox(
         "生成中英双语版本",
-        value=output_config.get("bilingual", True),
+        value=bilingual_val,
         help="勾选后，每次生成简历和求职信都会同时生成中文和英文两个版本"
     )
 
     default_lang = st.radio(
         "默认主语言",
         ["中文", "英文"],
-        index=0 if output_config.get("default_language", "zh") == "zh" else 1,
+        index=0 if default_lang_val == "zh" else 1,
         horizontal=True,
         help="当只生成一个版本时使用的语言"
     )
 
     if st.button("💾 保存语言设置", use_container_width=True):
+        config = copy.deepcopy(st.session_state.get("config", {}))
         config["output"] = {
             "bilingual": bilingual,
             "default_language": "zh" if default_lang == "中文" else "en",
             "resume_format": output_config.get("resume_format", "html"),
         }
         save_config(config)
-        st.session_state.config = config
         st.success("语言设置已保存！")

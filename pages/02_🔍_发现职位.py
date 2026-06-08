@@ -169,7 +169,6 @@ with tab2:
                     # 提取已有公司
                     existing = [c.strip() for c in existing_companies.split("\n") if c.strip()]
                     if st.session_state.get("jobs_df") is not None:
-                        from modules.discovery.company_finder import CompanyFinder
                         cf_temp = CompanyFinder({"company_discovery": discovery_config}, llm)
                         job_companies = cf_temp.extract_from_jobs(st.session_state.jobs_df)
                         existing = list(set(existing + job_companies))

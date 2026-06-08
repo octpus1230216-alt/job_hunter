@@ -163,12 +163,13 @@ with tab3:
 
     2. 进入项目目录：
     ```
-    cd C:\\ProgramData\\WorkBuddy\\chromium-env\\6od91a\\WorkBuddy\\2026-06-08-10-32-07\\job-hunter
+    cd job-hunter
     ```
+    （如果不在 job-hunter 目录下，请替换为实际路径）
 
-    3. 激活 Python 虚拟环境（如果已创建）：
+    3. 确保已安装 Streamlit（首次需要）：
     ```
-    C:\\ProgramData\\WorkBuddy\\chromium-env\\6od91a\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\activate
+    pip install streamlit pyyaml
     ```
 
     4. 启动 Streamlit：
@@ -197,11 +198,13 @@ with tab3:
 
     ### 方式二：使用虚拟环境中的 Streamlit
 
-    如果全局没有安装 Streamlit，使用项目自带的虚拟环境：
+    如果全局没有安装 Streamlit，可以通过以下方式：
 
-    **Windows：**
+    **Windows / Mac / Linux：**
+    先安装依赖，再启动服务：
     ```
-    C:\\ProgramData\\WorkBuddy\\chromium-env\\6od91a\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\streamlit.exe run app.py
+    pip install -r requirements.txt
+    streamlit run app.py
     ```
 
     ---
@@ -239,13 +242,6 @@ with tab3:
 
     ```
     pip install -r requirements.txt
-    ```
-
-    或使用虚拟环境：
-
-    **Windows：**
-    ```
-    C:\\ProgramData\\WorkBuddy\\chromium-env\\6od91a\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\pip.exe install -r requirements.txt
     ```
     """)
 

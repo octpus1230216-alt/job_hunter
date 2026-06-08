@@ -5,10 +5,9 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+from modules.tracker import ApplicationTracker
 
 st.title("📈 投递追踪")
-
-from modules.tracker import ApplicationTracker
 
 tracker = ApplicationTracker()
 applications = tracker.load()

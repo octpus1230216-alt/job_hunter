@@ -16,14 +16,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 隐藏 Streamlit 默认UI元素
+# 全局样式（只隐藏 Streamlit 默认的菜单和页脚，
+# 保留侧边栏导航）
 hide_streamlit_style = """
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
-    [data-testid="stSidebarNav"] {display: none;}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -50,11 +50,11 @@ if "config" not in st.session_state:
 
 
 # ============================================================
-# 缓存 LLM 客户端（避免重复初始化，提升稳定性）
+# 缓存的 LLM 客户端（唯一的定义，其他页面通过 session_state 访问）
 # ============================================================
 @st.cache_resource
-def get_llm_client():
-    """缓存LLM客户端，避免每次rerun都重建连接"""
+def get_or_init_llm():
+    """缓存 LLM 客户端，避免每次 rerun 都重建连接"""
     try:
         from modules.llm import LLMClient
         return LLMClient()
@@ -63,54 +63,27 @@ def get_llm_client():
 
 
 # ============================================================
-# 侧边栏 — 中文导航
+# 侧边栏 — 状态指示
 # ============================================================
 with st.sidebar:
-    st.title("🎯 半自动找工作工具")
     st.markdown("---")
-
-    # 导航链接
-    st.subheader("📋 工作流程")
-
-    pages = {
-        "🏠 首页": "app",
-        "⚙️ 配置": "01_config",
-        "🔍 发现职位": "02_discovery",
-        "📊 审核挑选": "03_review",
-        "✨ 生成简历": "04_generator",
-        "📈 投递追踪": "05_tracker",
-        "📖 使用说明": "06_manual",
-    }
-
-    # 简单文字导航（Streamlit多页面自动处理）
-    st.markdown("""
-    **操作步骤：**
-    1. ⚙️ **配置** — 上传简历、设置API
-    2. 🔍 **发现职位** — 搜索职位、发现公司
-    3. 📊 **审核挑选** — 匹配筛选、挑选岗位
-    4. ✨ **生成简历** — 定制简历和求职信
-    5. 📈 **投递追踪** — 投递进度管理
-
-    📖 **使用说明** — 详细文档和常见问题
-    """)
-
-    st.markdown("---")
-
-    # 状态指示
-    st.subheader("📌 当前状态")
+    st.subheader("📌 运行状态")
 
     if st.session_state.get("resume_parsed"):
         st.success("✅ 简历已加载")
     else:
         st.warning("⚠️ 请先上传简历")
 
-    # 尝试初始化LLM
-    llm = get_llm_client()
-    if llm is not None:
-        st.session_state.llm_client = llm
-        st.success("✅ AI已就绪")
+    # 自动初始化 LLM
+    if st.session_state.get("llm_client") is None:
+        llm = get_or_init_llm()
+        if llm is not None:
+            st.session_state.llm_client = llm
+
+    if st.session_state.get("llm_client"):
+        st.success("✅ AI 已就绪")
     else:
-        st.warning("⚠️ 请先配置API")
+        st.warning("⚠️ 请先配置 API")
 
     if st.session_state.get("jobs_found"):
         count = len(st.session_state.jobs_found)
@@ -157,13 +130,12 @@ st.markdown("""
 
 ### 🚀 快速开始
 
-1. 进入左侧 **⚙️ 配置** 页面，上传主简历，设置API Key
-2. 进入 **🔍 发现职位** 页面，开始搜索或粘贴JD
-3. 在 **📊 审核挑选** 页面筛选你想投的岗位
-4. 在 **✨ 生成简历** 页面一键生成定制版中英文简历
-5. 拿着简历去平台投递，回来在 **📈 投递追踪** 页面标记进度
+1. 点击左侧 **⚙️ 配置**，上传主简历，设置 API Key
+2. 点击 **🔍 发现职位**，搜索或粘贴 JD
+3. 在 **📊 审核挑选** 筛选你想投的岗位
+4. 在 **✨ 生成简历** 一键生成定制版中英文简历
+5. 拿着简历去平台投递，回来在 **📈 投递追踪** 标记进度
 
 > 💡 **所有数据都存在你本地电脑上**，简历不会上传到任何第三方。
-> 
-> 📖 遇到问题？查看左侧的 **使用说明** 页面。
+> 📖 遇到问题？查看左侧的 **📖 使用说明** 页面。
 """)
