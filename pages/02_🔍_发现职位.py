@@ -14,22 +14,22 @@ from datetime import datetime
 # 辅助函数（必须在页面主逻辑之前定义）
 # ============================================================
 def _render_report_editor(report):
-    """渲染可编辑的定位报告"""
+    """渲染可编辑的定位报告（双轨版本）"""
     col1, col2 = st.columns(2)
+
     with col1:
-        st.markdown("### 🎯 核心方向")
-        for d in report.get("core_directions", []):
-            st.markdown(f"**{d.get('role', '')}** — 匹配度 {d.get('match_score', 0)}")
-            st.caption(d.get("reason", ""))
-            st.caption(f"优势: {', '.join(d.get('key_strengths', []))}")
+        st.markdown("### 🎯 策略A：从行业找职位")
+        for item in report.get("strategy_a", {}).get("items", []):
+            st.markdown(f"**{item.get('industry', '')}**")
+            st.caption(f"职位方向: {', '.join(item.get('roles', []))}")
+            st.caption(f"搜索词: {', '.join(item.get('keywords_zh', []))}")
 
     with col2:
-        st.markdown("### 🔄 可迁移方向")
-        for d in report.get("transferable_directions", []):
-            st.markdown(f"**{d.get('role', '')}** → {d.get('new_industry', '')}")
-            st.caption(f"可迁移度: {d.get('transferability_score', 0)}")
-            st.caption(f"可复用: {', '.join(d.get('transferable_skills', []))}")
-            st.caption(f"需补充: {', '.join(d.get('skill_gaps', []))}")
+        st.markdown("### 🔄 策略B：从能力找行业")
+        for item in report.get("strategy_b", {}).get("items", []):
+            st.markdown(f"**{item.get('skill', '')}**")
+            st.caption(f"适用行业: {', '.join(item.get('industries', []))}")
+            st.caption(f"搜索词: {', '.join(item.get('keywords_zh', []))}")
 
     st.markdown("### ⚠️ 弱项提醒")
     for w in report.get("weakness_alerts", []):
@@ -41,28 +41,39 @@ def _render_report_editor(report):
     salary = report.get("salary_anchor", {})
     if salary:
         st.markdown(f"- 当前估计: {salary.get('current_estimated_range', 'N/A')}")
-        st.markdown(f"- 核心方向: {salary.get('core_direction_range', 'N/A')}")
-        st.markdown(f"- 可迁移方向: {salary.get('transferable_range', 'N/A')}")
+        st.markdown(f"- 市场范围: {salary.get('market_range', 'N/A')}")
 
-    st.markdown("### 🔍 搜索关键词")
+    st.markdown("### 🔍 搜索关键词汇总")
     kw = report.get("search_keywords", {})
-    st.markdown(f"**中文:** {', '.join(kw.get('zh', {}).get('core', []) + kw.get('zh', {}).get('transferable', []))}")
-    st.markdown(f"**English:** {', '.join(kw.get('en', {}).get('core', []) + kw.get('en', {}).get('transferable', []))}")
+    st.markdown(f"**中文:** {', '.join(kw.get('zh', []))}")
+    st.markdown(f"**English:** {', '.join(kw.get('en', []))}")
 
 
 def _classify_industry(job: dict, report: dict) -> str:
     """判断岗位属于核心/可迁移/探索"""
     title = job.get("title", "").lower()
     desc = job.get("description", "").lower()[:500]
-    for d in report.get("core_directions", []):
-        role = d.get("role", "").lower()
-        if role and (role in title or role in desc):
-            return "核心行业"
-    for d in report.get("transferable_directions", []):
-        role = d.get("role", "").lower()
-        if role and (role in title or role in desc):
-            return "可迁移"
+
+    # 检查策略A关键词
+    for item in report.get("strategy_a", {}).get("items", []):
+        for kw in item.get("keywords_zh", []) + item.get("keywords_en", []):
+            if kw.lower() in title or kw.lower() in desc:
+                return "核心行业"
+
+    # 检查策略B关键词
+    for item in report.get("strategy_b", {}).get("items", []):
+        for kw in item.get("keywords_zh", []) + item.get("keywords_en", []):
+            if kw.lower() in title or kw.lower() in desc:
+                return "可迁移"
+
     return "探索"
+
+
+def _match_single_job(job: dict, resume: dict, llm_client) -> dict:
+    """单个岗位匹配"""
+    from modules.matcher import JobMatcher
+    matcher = JobMatcher(llm_client)
+    return matcher.match_single(resume, job)
 
 
 def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list:
@@ -110,6 +121,58 @@ if not st.session_state.get("resume_parsed"):
 if not st.session_state.get("llm_client"):
     st.warning("⚠️ 请先在 ⚙️ 配置页面设置 API Key")
     st.stop()
+
+# ============================================================
+# 后台任务状态面板
+# ============================================================
+_task_dir = Path(__file__).parent.parent / "data" / "search_tasks"
+_task_dir.mkdir(parents=True, exist_ok=True)
+
+active_tasks = []
+for f in sorted(_task_dir.glob("*_progress.json")):
+    try:
+        with open(f, "r", encoding="utf-8") as fh:
+            task = json.load(fh)
+            if task.get("status") in ("running", "pending"):
+                active_tasks.append(task)
+            elif task.get("status") == "completed":
+                # 加载结果
+                result_file = _task_dir / f"{task['task_id']}_results.json"
+                if result_file.exists():
+                    with open(result_file, "r", encoding="utf-8") as rf:
+                        results = json.load(rf)
+                    task["results"] = results
+                active_tasks.append(task)
+    except Exception:
+        pass
+
+if active_tasks:
+    with st.container():
+        st.markdown("### 📊 后台任务")
+        for task in active_tasks:
+            status = task.get("status", "")
+            icon = {"running": "🔄", "completed": "✅", "error": "❌", "pending": "⏳"}.get(status, "📌")
+            col_a, col_b = st.columns([4, 1])
+            with col_a:
+                st.markdown(f"{icon} **{task.get('task_id', '?')}** — {task.get('message', '')}")
+            with col_b:
+                if status == "completed" and task.get("results"):
+                    if st.button("📥 导入审核", key=f"import_{task['task_id']}", use_container_width=True):
+                        new_jobs = task["results"]
+                        if not isinstance(new_jobs, list):
+                            new_jobs = [new_jobs]
+                        for nj in new_jobs[:50]:
+                            tag = _classify_industry(nj, st.session_state.career_report or {})
+                            nj["_industry_tag"] = tag
+                            nj["_match"] = {}
+                        st.session_state.all_jobs = new_jobs + st.session_state.all_jobs
+                        # 清理任务文件
+                        _task_file = _task_dir / f"{task['task_id']}_task.json"
+                        if _task_file.exists():
+                            _task_file.unlink()
+                        st.success("已导入！")
+                        st.rerun()
+        st.markdown("---")
 
 # ============================================================
 # State 初始化
@@ -204,14 +267,14 @@ report = st.session_state.career_report
 st.markdown("---")
 st.subheader("🔎 Step 2: 搜索职位")
 
-tab1, tab2, tab3 = st.tabs(["🌍 海外平台自动搜索", "🏠 国内平台直达搜索", "📋 手动粘贴 JD"])
+tab1, tab2, tab3, tab4 = st.tabs(["🌍 海外平台自动搜索", "🏠 国内平台直达搜索", "🤖 AI 全网搜索", "📋 手动粘贴 JD"])
 
 # ---- Tab 1: 海外平台 ----
 with tab1:
     st.markdown("**使用 JobSpy 自动搜索 LinkedIn / Indeed 等海外平台**")
 
-    keywords_en = report.get("search_keywords", {}).get("en", {})
-    default_keywords = keywords_en.get("core", []) + keywords_en.get("transferable", [])
+    keywords_en = report.get("search_keywords", {}).get("en", [])
+    default_keywords = keywords_en if keywords_en else ["ESG analyst", "climate policy", "sustainability"]
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -242,73 +305,93 @@ with tab1:
                                     format_func=lambda x: {"indeed": "Indeed", "linkedin": "LinkedIn",
                                         "glassdoor": "Glassdoor", "google": "Google Jobs"}[x])
 
-    if st.button("🚀 开始海外搜索", use_container_width=True, type="primary", key="btn_overseas"):
-        terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
-        if not terms:
-            st.error("请输入至少一个搜索关键词")
-        else:
-            with st.status("正在搜索海外平台...", expanded=True) as status:
-                try:
-                    from jobspy import scrape_jobs
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("🚀 前台搜索（等待结果）", use_container_width=True, key="btn_overseas"):
+            terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
+            if not terms:
+                st.error("请输入至少一个搜索关键词")
+            else:
+                with st.status("正在搜索海外平台...", expanded=True) as status:
+                    try:
+                        from jobspy import scrape_jobs
 
-                    all_results = []
-                    total_terms = len(terms) * len(countries_display) * len(platforms)
-                    count = 0
+                        all_results = []
+                        total_terms = len(terms) * len(countries_display) * len(platforms)
+                        count = 0
 
-                    for term in terms[:3]:
-                        for disp_name in countries_display[:3]:
-                            country = JOBSPY_COUNTRIES.get(disp_name, disp_name)
-                            for platform in platforms[:2]:
-                                count += 1
-                                st.write(f"🔍 ({count}/{min(total_terms, 18)}) {platform}: {term} in {disp_name}")
+                        for term in terms[:3]:
+                            for disp_name in countries_display[:3]:
+                                country = JOBSPY_COUNTRIES.get(disp_name, disp_name)
+                                for platform in platforms[:2]:
+                                    count += 1
+                                    st.write(f"🔍 ({count}/{min(total_terms, 18)}) {platform}: {term} in {disp_name}")
 
-                                try:
-                                    kwargs = {
-                                        "site_name": platform,
-                                        "search_term": term,
-                                        "results_wanted": 50,
-                                        "hours_old": hours_old,
-                                        "country_indeed": country,
-                                    }
-                                    if platform == "google":
-                                        kwargs["google_search_term"] = f"{term} jobs"
+                                    try:
+                                        kwargs = {
+                                            "site_name": platform,
+                                            "search_term": term,
+                                            "results_wanted": 50,
+                                            "hours_old": hours_old,
+                                            "country_indeed": country,
+                                        }
+                                        if platform == "google":
+                                            kwargs["google_search_term"] = f"{term} jobs"
 
-                                    df = scrape_jobs(**kwargs)
-                                    if df is not None and not df.empty:
-                                        df["source_platform"] = platform
-                                        df["source_country"] = country
-                                        all_results.append(df)
-                                except Exception as e:
-                                    st.write(f"  ⚠️ 跳过: {str(e)[:80]}")
+                                        df = scrape_jobs(**kwargs)
+                                        if df is not None and not df.empty:
+                                            df["source_platform"] = platform
+                                            df["source_country"] = country
+                                            all_results.append(df)
+                                    except Exception as e:
+                                        st.write(f"  ⚠️ 跳过: {str(e)[:80]}")
 
-                    if all_results:
-                        combined = pd.concat(all_results, ignore_index=True)
-                        combined = combined.drop_duplicates(subset=["job_url"], keep="first")
-                        st.session_state.jobs_df = combined
+                        if all_results:
+                            combined = pd.concat(all_results, ignore_index=True)
+                            combined = combined.drop_duplicates(subset=["job_url"], keep="first")
+                            st.session_state.jobs_df = combined
 
-                        # 立即匹配
-                        st.write("🧠 正在计算匹配度...")
-                        new_jobs = _match_jobs(combined, st.session_state.resume_parsed,
-                                              st.session_state.llm_client,
-                                              report)
+                            st.write("🧠 正在计算匹配度...")
+                            new_jobs = _match_jobs(combined, st.session_state.resume_parsed,
+                                                  st.session_state.llm_client,
+                                                  report)
 
-                        # 合并到 all_jobs
-                        st.session_state.all_jobs = new_jobs + [
-                            j for j in st.session_state.all_jobs
-                            if j.get("source_platform") not in platforms
-                        ]
-                        status.update(label=f"搜索完成！找到 {len(new_jobs)} 个职位", state="complete")
-                        st.success(f"共找到 {len(new_jobs)} 个职位")
-                    else:
-                        status.update(label="未找到结果", state="complete")
-                        st.warning("未找到匹配的职位，尝试更换关键词或平台")
+                            st.session_state.all_jobs = new_jobs + [
+                                j for j in st.session_state.all_jobs
+                                if j.get("source_platform") not in platforms
+                            ]
+                            status.update(label=f"搜索完成！找到 {len(new_jobs)} 个职位", state="complete")
+                            st.success(f"共找到 {len(new_jobs)} 个职位")
+                        else:
+                            status.update(label="未找到结果", state="complete")
+                            st.warning("未找到匹配的职位，尝试更换关键词或平台")
 
-                except ImportError:
-                    status.update(label="缺少依赖", state="error")
-                    st.error("缺少 JobSpy 依赖。请运行: pip install python-jobspy tls_client markdownify regex")
-                except Exception as e:
-                    status.update(label="搜索失败", state="error")
-                    st.error(f"搜索失败: {str(e)[:200]}")
+                    except ImportError:
+                        status.update(label="缺少依赖", state="error")
+                        st.error("缺少 JobSpy 依赖。请运行: pip install python-jobspy tls_client markdownify regex")
+                    except Exception as e:
+                        status.update(label="搜索失败", state="error")
+                        st.error(f"搜索失败: {str(e)[:200]}")
+
+    with col4:
+        if st.button("🔄 后台搜索（切页不中断）", use_container_width=True, key="btn_bg_overseas",
+                     help="搜索在后台运行，即使切换到其他页面也不会中断"):
+            terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
+            if not terms:
+                st.error("请输入至少一个搜索关键词")
+            else:
+                from search_worker import submit_task
+                country_values = [JOBSPY_COUNTRIES.get(c, c) for c in countries_display]
+                task_id = submit_task("overseas", {
+                    "keywords": terms,
+                    "countries": country_values,
+                    "platforms": platforms,
+                    "hours_old": hours_old,
+                })
+                st.success(f"后台任务已提交: {task_id}")
+                st.info("💡 请在终端运行 `python search_worker.py` 来启动后台工作进程")
+                st.info("💡 搜索完成后，刷新页面在顶部「后台任务」面板中导入结果")
+                st.rerun()
 
 # ---- Tab 2: 国内平台直达搜索 ----
 with tab2:
@@ -357,9 +440,9 @@ with tab2:
         """)
 
     # AI 生成的直达搜索链接
-    keywords_zh = report.get("search_keywords", {}).get("zh", {})
-    core_kw = keywords_zh.get("core", [])
-    trans_kw = keywords_zh.get("transferable", [])
+    keywords_zh = report.get("search_keywords", {}).get("zh", [])
+    core_kw = keywords_zh[:5] if keywords_zh else []
+    trans_kw = keywords_zh[5:] if len(keywords_zh) > 5 else []
 
     if core_kw or trans_kw:
         st.markdown("### 🔗 AI 生成的直达搜索链接")
@@ -431,8 +514,86 @@ with tab2:
     except Exception:
         pass
 
-# ---- Tab 3: 手动粘贴 JD ----
+# ---- Tab 3: AI 全网搜索 ----
 with tab3:
+    st.markdown("**AI 使用搜索引擎帮你发现全网公开职位**")
+    st.caption("不限于特定平台，覆盖更广，由 AI 二次筛选")
+
+    search_kw = report.get("search_keywords", {})
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**中文关键词**")
+        zh_kw = st.text_area(
+            "zh_kw",
+            label_visibility="collapsed",
+            value="\n".join(search_kw.get("zh", [])[:8]) if search_kw.get("zh") else "",
+            height=120,
+            placeholder="每行一个关键词，如：ESG 分析师、碳市场 研究员",
+        )
+    with col2:
+        st.markdown("**英文关键词**")
+        en_kw = st.text_area(
+            "en_kw",
+            label_visibility="collapsed",
+            value="\n".join(search_kw.get("en", [])[:8]) if search_kw.get("en") else "",
+            height=120,
+            placeholder="One keyword per line, e.g. ESG analyst, climate policy",
+        )
+
+    max_per = st.slider("每个关键词最多结果数", 5, 30, 15, 5)
+
+    if st.button("🚀 开始 AI 全网搜索", use_container_width=True, type="primary", key="btn_ai_search"):
+        zh_list = [k.strip() for k in zh_kw.split("\n") if k.strip()]
+        en_list = [k.strip() for k in en_kw.split("\n") if k.strip()]
+
+        if not zh_list and not en_list:
+            st.error("请输入至少一个关键词")
+        else:
+            with st.status("AI 正在搜索全网职位...", expanded=True) as status:
+                try:
+                    from modules.ai_searcher import AISearcher
+                    searcher = AISearcher(st.session_state.llm_client)
+
+                    all_found = []
+
+                    if zh_list:
+                        st.write(f"🌏 搜索中文关键词: {', '.join(zh_list[:5])}")
+                        found = searcher.search(zh_list, max_per)
+                        all_found.extend(found)
+                        st.write(f"  找到 {len(found)} 条")
+
+                    if en_list:
+                        st.write(f"🌍 搜索英文关键词: {', '.join(en_list[:5])}")
+                        found = searcher.search(en_list, max_per)
+                        all_found.extend(found)
+                        st.write(f"  找到 {len(found)} 条")
+
+                    if all_found:
+                        # 匹配
+                        st.write("🧠 正在计算匹配度...")
+                        matched = []
+                        for job in all_found[:30]:
+                            match = _match_single_job(job, st.session_state.resume_parsed,
+                                                      st.session_state.llm_client)
+                            tag = _classify_industry(job, report)
+                            matched.append({**job, "_match": match, "_industry_tag": tag})
+
+                        matched.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+                        st.session_state.all_jobs = matched + st.session_state.all_jobs
+
+                        status.update(label=f"搜索完成！找到 {len(all_found)} 个职位", state="complete")
+                        st.success(f"共找到 {len(all_found)} 个职位，已加入审核列表")
+                    else:
+                        status.update(label="未找到结果", state="complete")
+                        st.warning("未找到结果，尝试更换关键词")
+
+                except Exception as e:
+                    status.update(label="搜索失败", state="error")
+                    st.error(f"搜索失败: {str(e)[:200]}")
+
+# ---- Tab 4: 手动粘贴 JD ----
+with tab4:
     st.markdown("**粘贴任意平台的 JD，AI 自动解析 + 匹配 + 标注行业类型**")
 
     with st.form("paste_jd"):
