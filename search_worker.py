@@ -17,6 +17,19 @@ TASK_DIR = DATA_DIR / "search_tasks"
 TASK_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def is_cancelled(task_id: str) -> bool:
+    """检查任务是否被取消"""
+    cancel_file = TASK_DIR / f"{task_id}_cancel.json"
+    return cancel_file.exists()
+
+
+def cancel_task(task_id: str):
+    """取消任务（由UI调用）"""
+    cancel_file = TASK_DIR / f"{task_id}_cancel.json"
+    cancel_file.write_text("cancelled")
+    update_progress(task_id, "cancelled", "用户取消")
+
+
 def run_overseas_search(task_id: str, params: dict):
     """执行海外平台搜索"""
     terms = params.get("keywords", [])
@@ -35,7 +48,12 @@ def run_overseas_search(task_id: str, params: dict):
         count = 0
 
         for term in terms[:5]:
+            if is_cancelled(task_id):
+                update_progress(task_id, "cancelled", "用户取消")
+                return
             for country_disp in countries[:3]:
+                if is_cancelled(task_id):
+                    return
                 for plat in platforms[:2]:
                     count += 1
                     update_progress(task_id, "running",
@@ -97,6 +115,9 @@ def run_ai_search(task_id: str, params: dict):
         all_jobs = []
 
         for kw in (zh_keywords + en_keywords)[:12]:
+            if is_cancelled(task_id):
+                update_progress(task_id, "cancelled", "用户取消")
+                return
             update_progress(task_id, "running", f"🔍 搜索: {kw}")
             results = searcher._search_single(kw, max_per)
             all_jobs.extend(results)

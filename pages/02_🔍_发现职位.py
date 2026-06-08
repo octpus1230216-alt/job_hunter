@@ -151,13 +151,13 @@ if active_tasks:
         st.markdown("### 📊 后台任务")
         for task in active_tasks:
             status = task.get("status", "")
-            icon = {"running": "🔄", "completed": "✅", "error": "❌", "pending": "⏳"}.get(status, "📌")
-            col_a, col_b = st.columns([4, 1])
+            icon = {"running": "🔄", "completed": "✅", "error": "❌", "cancelled": "⏹", "pending": "⏳"}.get(status, "📌")
+            col_a, col_b, col_c = st.columns([3, 1, 1])
             with col_a:
                 st.markdown(f"{icon} **{task.get('task_id', '?')}** — {task.get('message', '')}")
             with col_b:
                 if status == "completed" and task.get("results"):
-                    if st.button("📥 导入审核", key=f"import_{task['task_id']}", use_container_width=True):
+                    if st.button("📥 导入", key=f"import_{task['task_id']}", use_container_width=True):
                         new_jobs = task["results"]
                         if not isinstance(new_jobs, list):
                             new_jobs = [new_jobs]
@@ -166,13 +166,42 @@ if active_tasks:
                             nj["_industry_tag"] = tag
                             nj["_match"] = {}
                         st.session_state.all_jobs = new_jobs + st.session_state.all_jobs
-                        # 清理任务文件
                         _task_file = _task_dir / f"{task['task_id']}_task.json"
                         if _task_file.exists():
                             _task_file.unlink()
                         st.success("已导入！")
                         st.rerun()
+            with col_c:
+                if status == "running":
+                    if st.button("⏹ 停止", key=f"stop_{task['task_id']}", use_container_width=True):
+                        from search_worker import cancel_task
+                        cancel_task(task["task_id"])
+                        st.success("已取消")
+                        st.rerun()
         st.markdown("---")
+
+# ============================================================
+# 每日精选
+# ============================================================
+_digest_dir = Path(__file__).parent.parent / "data" / "daily_digests"
+_digest_dir.mkdir(parents=True, exist_ok=True)
+_latest_digest = sorted(_digest_dir.glob("digest_*.json"), reverse=True)
+
+if _latest_digest:
+    with st.expander("📬 每日精选推荐", expanded=False):
+        with open(_latest_digest[0], "r", encoding="utf-8") as f:
+            digest = json.load(f)
+
+        st.caption(f"生成日期: {digest.get('date', '?')} | 共发现 {digest.get('total_found', 0)} 个岗位")
+
+        top20 = digest.get("top_20", [])[:5]
+        for i, job in enumerate(top20):
+            score = job.get("_match_score", "?")
+            st.markdown(f"**#{i+1} [{score}分] {job.get('company', '?')}** — {job.get('title', '?')}")
+
+        st.markdown("---")
+        st.caption("💡 手动运行 `python daily_digest.py` 生成今日精选")
+        st.caption("💡 配合 Windows 任务计划程序实现每日自动运行")
 
 # ============================================================
 # State 初始化
