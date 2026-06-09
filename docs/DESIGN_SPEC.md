@@ -232,5 +232,6 @@ modules/
 | 进程 | 用途 | 通信方式 |
 |------|------|---------|
 | collector_server.py | 浏览器采集接收器 | HTTP (localhost:8765) |
+| Chrome 扩展 | Boss直聘/猎聘自动翻页批量抓取 | HTTP → collector_server |
 | search_worker.py | 后台搜索 | 文件系统 (JSON) |
 | daily_digest.py | 每日精选 | 文件系统 (JSON) |

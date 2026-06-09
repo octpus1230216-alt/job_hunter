@@ -446,26 +446,23 @@ with tab2:
             st.caption("然后安装浏览器脚本，浏览 Boss直聘/猎聘 时自动采集")
 
     # 浏览器脚本安装说明
-    with st.expander("📥 安装浏览器采集脚本（首次使用需要）"):
+    with st.expander("📥 安装采集工具（首次使用需要）"):
         st.markdown("""
-        **步骤 1：安装 Tampermonkey 插件**
-        - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-        - Edge: [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-
-        **步骤 2：导入采集脚本**
-        - 点击 Tampermonkey 图标 → 创建新脚本
-        - 复制 `browser_script/boss_collector.user.js` 的全部内容粘贴进去
-        - 同样操作导入 `browser_script/liepin_collector.user.js`
-        - 保存（Ctrl+S）
-
-        **步骤 3：启动本地接收器**
-        - 打开终端，运行：`python collector_server.py`
-        - 看到 "本地职位采集接收器已启动" 即成功
+        **推荐：Chrome 扩展（一键翻页批量抓取）**
+        1. 打开 Chrome，地址栏输入 `chrome://extensions/`
+        2. 打开右上角「开发者模式」
+        3. 点击「加载已解压的扩展程序」
+        4. 选择 `job-hunter/chrome_extension/` 目录
+        5. 安装完成！工具栏出现扩展图标
 
         **使用方式：**
-        - 正常浏览 Boss直聘/猎聘，点击搜索结果右侧的绿色「📥 采集」按钮
-        - 打开职位详情页会自动采集
-        - 采集到的职位会出现在下方的列表中
+        - 在 Boss直聘/猎聘 搜索关键词后，点击扩展图标
+        - 点击「🔄 自动翻页扫描」→ 自动翻页采集所有结果页
+        - 或点击「📥 采集当前页」只采集当前页
+
+        **备选：Tampermonkey 脚本（手动逐条采集）**
+        - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+        - 导入 `browser_script/boss_collector.user.js`
         """)
 
     # AI 生成的直达搜索链接
