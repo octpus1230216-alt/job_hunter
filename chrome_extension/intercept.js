@@ -82,16 +82,16 @@
   window.fetch = function(...args) {
     const url = (typeof args[0] === 'string') ? args[0] : (args[0]?.url || '');
     return origFetch.apply(this, args).then(resp => {
-      if (url && (url.includes('zhipin.com') || url.includes('liepin.com'))) {
-        const clone = resp.clone();
-        clone.text().then(text => {
+      // 移除域名过滤，拦截所有请求
+      // 只关心 JSON 响应
+      const clone = resp.clone();
+      clone.text().then(text => {
           try {
             const json = JSON.parse(text);
             sendRaw(json, url);  // 调试：发送原始数据
             tryExtract(json, url);
           } catch(e) {}
         }).catch(() => {});
-      }
       return resp;
     });
   };
@@ -109,13 +109,11 @@
     };
 
     xhr.addEventListener('load', function() {
-      if (reqUrl && (reqUrl.includes('zhipin.com') || reqUrl.includes('liepin.com'))) {
         try {
           const json = JSON.parse(xhr.responseText);
           sendRaw(json, reqUrl);
           tryExtract(json, reqUrl);
         } catch(e) {}
-      }
     });
     return xhr;
   };
