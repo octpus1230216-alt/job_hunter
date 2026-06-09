@@ -2,28 +2,44 @@
  * 职位猎手 - Popup Script
  */
 
-document.getElementById('btnCollect').addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  chrome.tabs.sendMessage(tab.id, { action: 'collectCurrent' }, (resp) => {
+function sendToTab(action, cb) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs || tabs.length === 0) {
+      document.getElementById('status').textContent = '未找到活动标签页';
+      return;
+    }
+    const tab = tabs[0];
+    if (!tab.url || (!tab.url.includes('zhipin.com') && !tab.url.includes('liepin.com'))) {
+      document.getElementById('status').textContent = '请打开Boss直聘/猎聘页面';
+      return;
+    }
+    chrome.tabs.sendMessage(tab.id, { action }, (resp) => {
+      if (chrome.runtime.lastError) {
+        document.getElementById('status').textContent = '请刷新Boss直聘页面后重试';
+        return;
+      }
+      if (cb) cb(resp);
+    });
+  });
+}
+
+document.getElementById('btnCollect').addEventListener('click', () => {
+  document.getElementById('status').textContent = '采集中...';
+  sendToTab('collectCurrent', (resp) => {
     if (resp) {
       document.getElementById('status').textContent = `已采集 ${resp.count} 个`;
       document.getElementById('count').textContent = resp.total;
-    } else {
-      document.getElementById('status').textContent = '请打开Boss直聘/猎聘页面';
     }
   });
 });
 
-document.getElementById('btnScanAll').addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  chrome.tabs.sendMessage(tab.id, { action: 'scanAll' }, (resp) => {
+document.getElementById('btnScanAll').addEventListener('click', () => {
+  document.getElementById('status').textContent = '自动扫描中...';
+  sendToTab('scanAll', (resp) => {
     if (resp) {
-      document.getElementById('status').textContent = '自动扫描中...';
-    } else {
-      document.getElementById('status').textContent = '仅支持Boss直聘搜索页';
+      document.getElementById('status').textContent = '扫描已启动，查看Boss页面';
     }
   });
-  window.close();
 });
 
 document.getElementById('btnClear').addEventListener('click', () => {

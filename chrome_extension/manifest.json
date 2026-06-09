@@ -14,14 +14,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.zhipin.com/web/geek/job*", "https://www.zhipin.com/job_detail/*"],
+      "matches": ["https://www.zhipin.com/*", "https://www.liepin.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.liepin.com/zhaopin/*", "https://www.liepin.com/job/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
   ],
   "action": {
