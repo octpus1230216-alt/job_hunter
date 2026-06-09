@@ -1,34 +1,27 @@
 /**
- * Injector - 通过 script 标签注入拦截代码到页面主世界
- * 这是最可靠的 MAIN world 注入方式
+ * 职位猎手 - 双重注入方案
+ * Part 1: script标签注入到MAIN world，拦截API
+ * Part 2: content script监听postMessage，中转数据到localhost
  */
+
+// ============================================================
+// Part 1: 注入 script 到页面主世界
+// ============================================================
 const script = document.createElement('script');
 script.textContent = `(${function() {
-  const COLLECTOR = 'http://localhost:8765/collect';
-  const sent = new Set();
   let count = 0;
 
   function send(job) {
-    const key = job.job_url || (job.company + job.title);
-    if (sent.has(key)) return;
-    sent.add(key);
-    fetch(COLLECTOR, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(job),
-    }).catch(() => {});
+    window.postMessage({ type: 'JOB_HUNTER_JOB', data: job }, '*');
   }
 
-  function debug(url, data) {
-    fetch('http://localhost:8765/debug', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, snippet: JSON.stringify(data).slice(0, 300), time: Date.now() }),
-    }).catch(() => {});
+  function debug(url, snippet) {
+    window.postMessage({ type: 'JOB_HUNTER_DEBUG', data: { url, snippet, time: Date.now() } }, '*');
   }
 
   function extract(json, url) {
-    const d = json?.zpData?.jobList || json?.data?.jobList || json?.zpData?.result || json?.result?.data;
+    const d = json?.zpData?.jobList || json?.data?.jobList || json?.result?.jobList
+          || json?.zpData?.result || json?.result?.data;
     if (d && Array.isArray(d)) {
       d.forEach(j => {
         if (j.jobName && j.brandName) {
@@ -43,7 +36,6 @@ script.textContent = `(${function() {
       });
       return;
     }
-    // 尝试遍历寻找职位数据
     try {
       const s = JSON.stringify(json);
       if (s.includes('encryptJobId') || s.includes('jobName') || s.includes('securityId')) {
@@ -75,7 +67,7 @@ script.textContent = `(${function() {
     return _fetch.apply(this, arguments).then(r => {
       if (r && r.clone) {
         r.clone().text().then(t => {
-          try { const j = JSON.parse(t); debug(url, j); extract(j, url); } catch(e) {}
+          try { const j = JSON.parse(t); debug(url, JSON.stringify(j).slice(0,300)); extract(j, url); } catch(e) {}
         }).catch(()=>{});
       }
       return r;
@@ -92,7 +84,7 @@ script.textContent = `(${function() {
     x.addEventListener('load', function() {
       try {
         const j = JSON.parse(x.responseText);
-        debug(u, j);
+        debug(u, JSON.stringify(j).slice(0,300));
         extract(j, u);
       } catch(e) {}
     });
@@ -104,3 +96,37 @@ script.textContent = `(${function() {
 
 script.onload = function() { this.remove(); };
 document.documentElement.appendChild(script);
+
+
+// ============================================================
+// Part 2: content script 监听 postMessage，中转数据到 localhost
+// ============================================================
+const sent = new Set();
+
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+
+  const msg = event.data;
+  if (!msg || !msg.type) return;
+
+  if (msg.type === 'JOB_HUNTER_JOB') {
+    const job = msg.data;
+    const key = job.job_url || (job.company + job.title);
+    if (sent.has(key)) return;
+    sent.add(key);
+
+    fetch('http://localhost:8765/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(job),
+    }).catch(() => {});
+  }
+
+  if (msg.type === 'JOB_HUNTER_DEBUG') {
+    fetch('http://localhost:8765/debug', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(msg.data),
+    }).catch(() => {});
+  }
+});
