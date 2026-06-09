@@ -64,44 +64,92 @@ function showToast(msg) {
 // Boss 直聘 采集逻辑
 // ============================================================
 function extractBossJobFromCard(card) {
-  const titleEl = card.querySelector('.job-name, .job-title');
-  const companyEl = card.querySelector('.company-name, .company-text');
-  const salaryEl = card.querySelector('.salary, .red');
-  const locEl = card.querySelector('.job-area, .location');
-  const urlEl = card.querySelector('a');
-
-  let jobUrl = '';
-  if (urlEl && urlEl.href) {
-    jobUrl = urlEl.href.split('?')[0].split('#')[0];
-    // 转换详情页URL为标准格式
-    if (jobUrl.includes('/job_detail/')) {
-      const match = jobUrl.match(/job_detail\/([a-zA-Z0-9]+)/);
-      if (match) jobUrl = `https://www.zhipin.com/job_detail/${match[1]}.html`;
+  // 尝试多种选择器提取各字段
+  const getText = (selectors) => {
+    for (const sel of selectors) {
+      const el = card.matches(sel) ? card : card.querySelector(sel);
+      if (el && el.textContent.trim()) return el.textContent.trim();
     }
+    return '';
+  };
+
+  const title = getText([
+    '.job-name', '.job-title', 'h3', '.name', 'a[href*="job_detail"]',
+    '[class*="job-name"]', '[class*="job-title"]',
+  ]);
+
+  const company = getText([
+    '.company-name', '.company-text', '.com-name', '.cname',
+    '[class*="company-name"]', '[class*="company-text"]',
+  ]);
+
+  const salary = getText([
+    '.salary', '.red', '.job-salary', '.salary-text',
+    '[class*="salary"]',
+  ]);
+
+  const location = getText([
+    '.job-area', '.location', '.area', '.job-location',
+    '[class*="area"]',
+  ]);
+
+  // 提取链接
+  let jobUrl = '';
+  if (card.href && card.href.includes('job_detail')) {
+    jobUrl = card.href;
+  } else {
+    const link = card.querySelector('a[href*="job_detail"]');
+    if (link) jobUrl = link.href;
+  }
+  if (jobUrl) {
+    jobUrl = jobUrl.split('?')[0];
   }
 
   return {
     source_platform: 'boss',
     job_url: jobUrl,
-    title: titleEl ? titleEl.textContent.trim() : '',
-    company: companyEl ? companyEl.textContent.trim() : '',
-    salary: salaryEl ? salaryEl.textContent.trim() : '',
-    location: locEl ? locEl.textContent.trim() : '',
+    title, company, salary, location,
   };
 }
 
 function collectCurrentBossPage() {
-  const cards = document.querySelectorAll('.job-card-wrapper, .job-card');
-  let count = 0;
+  // 尝试多种可能的卡片选择器
+  const selectors = [
+    '.job-card-wrapper',
+    '.job-card',
+    'li.job-card-box',
+    '[class*="job-card"]',
+    '.job-primary',
+    '.search-job-result li',
+    '.recommend-job-card',
+    '.job-detail-box',
+  ];
 
+  let cards = [];
+  for (const sel of selectors) {
+    cards = document.querySelectorAll(sel);
+    if (cards.length > 0) {
+      console.log(`🔍 使用选择器: ${sel}, 找到 ${cards.length} 个`);
+      break;
+    }
+  }
+
+  if (cards.length === 0) {
+    // 回退：找页面上所有看起来像职位的链接
+    cards = document.querySelectorAll('a[href*="job_detail"]');
+    console.log(`⚠️ 未匹配到卡片，找到 ${cards.length} 个 job_detail 链接`);
+  }
+
+  let count = 0;
   cards.forEach(card => {
     const job = extractBossJobFromCard(card);
-    if (job.title && job.company && job.job_url) {
+    if (job.title && job.company) {
       sendToCollector(job);
       count++;
     }
   });
 
+  console.log(`📊 本页成功采集: ${count} 个`);
   return count;
 }
 
