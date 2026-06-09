@@ -1,67 +1,95 @@
 /**
  * 职位猎手 - API 拦截器 (Main World)
- * 在 Boss直聘 JavaScript 运行前注入，劫持 fetch/XHR
+ * 调试版：拦截所有 API 响应，发送原始数据到采集器
  */
 (function() {
   'use strict';
   const COLLECTOR = 'http://localhost:8765/collect';
-  const sent = new Set();
+  let count = 0;
 
-  function sendJob(job) {
-    const key = job.job_url || (job.company + job.title);
-    if (sent.has(key)) return;
-    sent.add(key);
-    fetch(COLLECTOR, {
+  function sendRaw(json, url) {
+    // 发送原始数据到采集器调试端点
+    fetch('http://localhost:8765/debug', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(job),
+      body: JSON.stringify({ url, data: json, time: Date.now() }),
     }).catch(() => {});
   }
 
-  function extractJobs(obj) {
-    const results = [];
-    if (!obj || typeof obj !== 'object') return results;
-
-    // 递归搜索所有数组字段
-    const search = (o) => {
-      if (!o || typeof o !== 'object') return;
-      if (Array.isArray(o)) {
-        for (const item of o) {
-          if (item && typeof item === 'object') {
-            const title = item.jobName || item.job_name || item.jobTitle || item.title || '';
-            const company = item.brandName || item.brand_name || item.companyName || item.company_name || item.company || '';
-            if (title && company) {
-              results.push({
-                source_platform: 'boss',
-                job_url: item.encryptJobId ? `https://www.zhipin.com/job_detail/${item.encryptJobId}.html` : '',
-                title: String(title),
-                company: String(company),
-                salary: item.salaryDesc || item.salary_desc || item.salary || '',
-                location: item.cityName || item.city_name || item.areaDistrict || '',
-                description: item.jobDescription || item.job_description || '',
-              });
-            }
+  function tryExtract(json, url) {
+    // 尝试多种Boss直聘的数据结构
+    const tests = [
+      // Boss直聘新版
+      () => {
+        const list = json?.zpData?.jobList || json?.data?.jobList || json?.result?.jobList;
+        if (!list || !Array.isArray(list)) return [];
+        return list.map(j => ({
+          source_platform: 'boss',
+          title: j.jobName || '',
+          company: j.brandName || '',
+          salary: j.salaryDesc || '',
+          location: j.cityName || j.areaDistrict || '',
+          job_url: j.encryptJobId ? `https://www.zhipin.com/job_detail/${j.encryptJobId}.html` : '',
+          description: '',
+        })).filter(j => j.title && j.company);
+      },
+      // Boss直聘旧版/其他结构
+      () => {
+        const str = JSON.stringify(json);
+        if (!str.includes('encryptJobId') && !str.includes('jobName')) return [];
+        const jobs = [];
+        const find = (obj) => {
+          if (!obj || typeof obj !== 'object') return;
+          if (Array.isArray(obj)) { obj.forEach(find); return; }
+          if (obj.encryptJobId || obj.jobName || obj.securityId) {
+            jobs.push({
+              source_platform: 'boss',
+              title: obj.jobName || obj.jobTitle || obj.title || '',
+              company: obj.brandName || obj.companyName || obj.company || '',
+              salary: obj.salaryDesc || obj.salary || '',
+              location: obj.cityName || obj.areaDistrict || obj.location || '',
+              job_url: obj.encryptJobId ? `https://www.zhipin.com/job_detail/${obj.encryptJobId}.html` : '',
+              description: '',
+            });
           }
-          search(item);
+          Object.values(obj).forEach(find);
+        };
+        find(json);
+        return jobs.filter(j => j.title && j.company);
+      },
+    ];
+
+    for (const test of tests) {
+      try {
+        const jobs = test();
+        if (jobs.length > 0) {
+          jobs.forEach(j => {
+            count++;
+            fetch(COLLECTOR, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(j),
+            }).catch(() => {});
+          });
+          return;
         }
-      } else if (typeof o === 'object') {
-        for (const v of Object.values(o)) search(v);
-      }
-    };
-    search(obj);
-    return results;
+      } catch(e) {}
+    }
   }
 
   // 劫持 fetch
   const origFetch = window.fetch;
   window.fetch = function(...args) {
-    const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+    const url = (typeof args[0] === 'string') ? args[0] : (args[0]?.url || '');
     return origFetch.apply(this, args).then(resp => {
-      if (url.includes('zhipin.com') || url.includes('liepin.com')) {
+      if (url && (url.includes('zhipin.com') || url.includes('liepin.com'))) {
         const clone = resp.clone();
-        clone.json().then(json => {
-          const jobs = extractJobs(json);
-          jobs.forEach(sendJob);
+        clone.text().then(text => {
+          try {
+            const json = JSON.parse(text);
+            sendRaw(json, url);  // 调试：发送原始数据
+            tryExtract(json, url);
+          } catch(e) {}
         }).catch(() => {});
       }
       return resp;
@@ -80,21 +108,17 @@
       return origOpen.apply(this, [method, url, ...rest]);
     };
 
-    const origSend = xhr.send;
-    xhr.send = function(...args) {
-      xhr.addEventListener('load', function() {
-        if (reqUrl.includes('zhipin.com') || reqUrl.includes('liepin.com')) {
-          try {
-            const json = JSON.parse(xhr.responseText);
-            const jobs = extractJobs(json);
-            jobs.forEach(sendJob);
-          } catch(e) {}
-        }
-      });
-      return origSend.apply(this, args);
-    };
+    xhr.addEventListener('load', function() {
+      if (reqUrl && (reqUrl.includes('zhipin.com') || reqUrl.includes('liepin.com'))) {
+        try {
+          const json = JSON.parse(xhr.responseText);
+          sendRaw(json, reqUrl);
+          tryExtract(json, reqUrl);
+        } catch(e) {}
+      }
+    });
     return xhr;
   };
 
-  console.log('🔍 职位猎手 API 拦截器已激活');
+  console.log('🔍 职位猎手 API 拦截器已激活 (调试模式)');
 })();

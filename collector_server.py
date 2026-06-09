@@ -29,6 +29,24 @@ def index():
     })
 
 
+@app.route("/debug", methods=["POST"])
+def debug_raw():
+    """调试端点：接收并记录原始 API 数据（不加入职位列表）"""
+    try:
+        data = request.get_json(force=True)
+        url = data.get("url", "")[:120]
+        json_data = data.get("data", {})
+
+        # 只记录包含职位相关字段的请求
+        str_data = str(json_data)[:200]
+        print(f"🔍 [DEBUG] {url}")
+        print(f"   {str_data}")
+
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/collect", methods=["POST"])
 def collect_job():
     """接收浏览器脚本发来的职位数据"""
