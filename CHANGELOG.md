@@ -4,7 +4,70 @@
 
 ---
 
-## v1.2.0 — 2026-06-08
+## v1.5.0 — 2026-06-09
+
+### 精简 — 三终端 → 二终端架构
+- **合并 `collector_server.py` → `boss_collector_cdp.py`**：端口 9999 统一处理
+  - `/status` — 综合状态 + 职位统计
+  - `/jobs` — 职位列表
+  - `/navigate` — 搜索导航指令
+  - `/collect` — 手动提交职位（兼容旧接口）
+  - `/clear`、`/export` — 管理功能
+- `collector_server.py` 归档为 `.archived`，不再需要独立运行
+- Streamlit 页面所有 `localhost:8765` → `localhost:9999`
+- 启动方式从 3 终端精简到 **2 终端**
+
+### 版本备份
+- 旧版文件备份在 `.backups/v1.4.0/`，包含完整的 3 终端架构
+- 还原方式: `cp .backups/v1.4.0/* ../`
+
+---
+
+## v1.4.0 — 2026-06-09
+
+### 新增 — Streamlit ↔ CDP 指令桥接 + 详情被动补全
+- **指令桥接**：
+  - `boss_collector_cdp.py` 内置 HTTP 指令服务器（端口 9999）
+  - Streamlit 中 AI 搜索关键词改为按钮，点击后 POST 到 CDP Chrome 自动导航
+  - 彻底解决了「Streamlit 链接→日常 Chrome 打开」和「CDP Chrome→手动输搜索词」之间的割裂
+  - 支持 `/navigate`（单次导航）和 `/navigate/multi`（批量导航）
+- **详情被动补全（方案 B）**：
+  - 列表 API → 采集基础信息（🟡 status: basic）
+  - 详情 API → 自动补全 JD（🟢 status: complete）
+  - 按 job_url / job_id 精确匹配合并
+  - Streamlit 中区分显示：🟢 完整可导入 / 🟡 提示点击补全
+- **`collector_server.py` 更新**：新增 `/update` 端点 + `/status` 端点
+
+### 反检测增强（v3）
+- 基于 `get_jobs Discussion #250` 的 CDP 时间差检测原理，注入 console.table/performance.now 覆盖
+- 反检测从通用 12 项补丁 → 精准针对 Boss 的 CDP 时间差检测
+
+### 文档
+- 新增 `docs/使用说明.md`：3 终端启动流程、完整使用教程、常见问题
+
+---
+
+## v1.3.0 — 2026-06-09
+
+### 新增 — Boss直聘 CDP 网络拦截采集器
+- **`boss_collector_cdp.py`**：通过 Playwright 连接 Chrome DevTools Protocol
+  - 在 CDP 协议层拦截 Boss直聘 API 网络响应
+  - 绕过 Content Security Policy，不受页面级 JS 限制
+  - 静默运行，用户正常浏览即可自动采集
+  - 支持本地缓存（collector_server 未启动时）
+  - MD5 去重，避免重复采集同一职位
+- **`run_boss_collector.bat`**：一键启动 Chrome + 采集器
+- 更新发现职位页面指引，推荐 CDP 方案替代 Chrome Extension
+
+### 技术说明
+- 放弃 Chrome Extension 方案（10 轮迭代均因 CSP + 隔离世界限制失败）
+- 改用 CDP 层网络拦截（参考 geekgeekrun/get_jobs 同类项目实践）
+- Playwright `connect_over_cdp()` 连接用户浏览器，非侵入式采集
+
+### 依赖变更
+- 新增 `playwright>=1.50.0`
+
+---
 
 ### 新增 — 发现职位模块全面重构
 - **AI 职业定位引擎** (`modules/career_advisor.py`)：上传简历后AI自动分析

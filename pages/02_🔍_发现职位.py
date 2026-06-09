@@ -424,119 +424,177 @@ with tab1:
 
 # ---- Tab 2: 国内平台直达搜索 ----
 with tab2:
-    st.markdown("**AI 生成直达搜索链接 + 浏览器自动采集**")
+    st.markdown("**AI 生成直达搜索 + CDP Chrome 自动导航**")
 
-    # 采集器状态
-    col_s1, col_s2 = st.columns([3, 1])
+    # 采集器 + CDP 状态
+    col_s1, col_s2, col_s3 = st.columns([2, 2, 1])
+    collector_running = False
+    cdp_running = False
+
     with col_s1:
         try:
             import httpx
-            resp = httpx.get("http://localhost:8765/", timeout=2)
+            resp = httpx.get("http://localhost:9999/status", timeout=2)
             if resp.status_code == 200:
                 data = resp.json()
-                st.success(f"✅ 采集器已运行 — 已收集 {data.get('total_collected', 0)} 个国内岗位")
-            else:
-                st.info("🔌 采集器未启动，点击下方按钮启动")
+                complete = data.get("complete", 0)
+                basic = data.get("basic", 0)
+                if complete > 0:
+                    st.success(f"✅ 采集器运行中 — 🟢 {complete} 完整 + 🟡 {basic} 基础")
+                else:
+                    st.success(f"✅ 采集器运行中 — 已收集 {data.get('total', 0)} 个岗位")
+                collector_running = True
         except Exception:
-            st.info("🔌 采集器未启动，点击下方按钮启动")
+            st.info("🔌 采集器 (8765) 未启动")
 
     with col_s2:
-        if st.button("▶️ 启动采集器", use_container_width=True, key="start_collector"):
-            st.info("请在终端运行: `python collector_server.py`")
-            st.caption("然后安装浏览器脚本，浏览 Boss直聘/猎聘 时自动采集")
+        try:
+            resp = httpx.get("http://localhost:9999/status", timeout=2)
+            if resp.status_code == 200:
+                data = resp.json()
+                st.success(f"✅ CDP Chrome 就绪 — 缓存 {data.get('jobs_cached', 0)} 个职位")
+                cdp_running = True
+        except Exception:
+            st.info("🔌 CDP 脚本 (9999) 未启动")
 
-    # 浏览器脚本安装说明
+    with col_s3:
+        if st.button("🔄 刷新", use_container_width=True, key="refresh_status"):
+            st.rerun()
+
+    # 安装说明
     with st.expander("📥 安装采集工具（首次使用需要）"):
         st.markdown("""
-        **推荐：Chrome 扩展（一键翻页批量抓取）**
-        1. 打开 Chrome，地址栏输入 `chrome://extensions/`
-        2. 打开右上角「开发者模式」
-        3. 点击「加载已解压的扩展程序」
-        4. 选择 `job-hunter/chrome_extension/` 目录
-        5. 安装完成！工具栏出现扩展图标
+        **CDP 网络拦截采集（推荐，3 步启动）**
+        1. 终端1: `python collector_server.py` — 数据接收
+        2. 终端2: `python boss_collector_cdp.py` — CDP Chrome + 指令桥接
+        3. 在下方点击关键词按钮 → Chrome 自动导航 → 浏览搜索结果 → 详情自动补全
 
-        **使用方式：**
-        - 在 Boss直聘/猎聘 搜索关键词后，点击扩展图标
-        - 点击「🔄 自动翻页扫描」→ 自动翻页采集所有结果页
-        - 或点击「📥 采集当前页」只采集当前页
-
-        **备选：Tampermonkey 脚本（手动逐条采集）**
-        - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-        - 导入 `browser_script/boss_collector.user.js`
+        详见 `docs/使用说明.md`
         """)
 
-    # AI 生成的直达搜索链接
+    # AI 生成的直达搜索链接 → 改为按钮
     keywords_zh = report.get("search_keywords", {}).get("zh", [])
     core_kw = keywords_zh[:5] if keywords_zh else []
     trans_kw = keywords_zh[5:] if len(keywords_zh) > 5 else []
 
     if core_kw or trans_kw:
-        st.markdown("### 🔗 AI 生成的直达搜索链接")
+        st.markdown("### 🎯 点击关键词，CDP Chrome 自动搜索")
 
         if core_kw:
             st.markdown("**核心方向：**")
             for kw in core_kw:
-                col_a, col_b = st.columns(2)
+                col_a, col_b = st.columns([3, 1])
                 with col_a:
-                    url = f"https://www.zhipin.com/web/geek/job?query={kw}"
-                    st.markdown(f"[🔍 Boss直聘 — {kw}]({url})")
+                    boss_url = f"https://www.zhipin.com/web/geek/job?query={kw}"
+                    st.markdown(f"**{kw}**")
+                    st.caption("Boss直聘 → 点击右侧按钮搜索")
                 with col_b:
-                    url2 = f"https://www.liepin.com/zhaopin/?key={kw}"
-                    st.markdown(f"[🔍 猎聘 — {kw}]({url2})")
+                    if st.button(f"🔍 搜索", key=f"btn_boss_{kw}", use_container_width=True,
+                                 help=f"在 CDP Chrome 中搜索 Boss直聘: {kw}"):
+                        if not cdp_running:
+                            st.warning("⚠️ CDP 脚本未运行，请先在终端执行: python boss_collector_cdp.py")
+                        else:
+                            try:
+                                resp = httpx.post("http://localhost:9999/navigate",
+                                                  json={"url": boss_url}, timeout=5)
+                                if resp.status_code == 200:
+                                    st.success(f"✅ Chrome 已导航: {kw}")
+                                    st.info("💡 切换到 Chrome 窗口浏览结果")
+                                else:
+                                    st.error(f"导航失败: {resp.text}")
+                            except Exception as e:
+                                st.error(f"指令发送失败: {e}")
 
         if trans_kw:
             st.markdown("**可迁移方向：**")
             for kw in trans_kw:
-                col_a, col_b = st.columns(2)
+                col_a, col_b = st.columns([3, 1])
                 with col_a:
-                    url = f"https://www.zhipin.com/web/geek/job?query={kw}"
-                    st.markdown(f"[🔍 Boss直聘 — {kw}]({url})")
+                    boss_url = f"https://www.zhipin.com/web/geek/job?query={kw}"
+                    st.markdown(f"**{kw}**")
+                    st.caption("Boss直聘 → 点击右侧按钮搜索")
                 with col_b:
-                    url2 = f"https://www.liepin.com/zhaopin/?key={kw}"
-                    st.markdown(f"[🔍 猎聘 — {kw}]({url2})")
+                    if st.button(f"🔍 搜索", key=f"btn_boss_{kw}", use_container_width=True):
+                        if not cdp_running:
+                            st.warning("⚠️ CDP 脚本未运行")
+                        else:
+                            try:
+                                resp = httpx.post("http://localhost:9999/navigate",
+                                                  json={"url": boss_url}, timeout=5)
+                                if resp.status_code == 200:
+                                    st.success(f"✅ Chrome 已导航: {kw}")
+                                    st.info("💡 切换到 Chrome 窗口浏览结果")
+                            except Exception as e:
+                                st.error(f"指令发送失败: {e}")
 
-    # 已采集的国内岗位
+    # 已采集的国内岗位（按状态显示）
     try:
         import httpx
-        resp = httpx.get("http://localhost:8765/jobs", timeout=2)
+        resp = httpx.get("http://localhost:9999/jobs", timeout=2)
         if resp.status_code == 200:
             collected = resp.json().get("jobs", [])
             if collected:
                 st.markdown("---")
-                st.markdown(f"### 📥 浏览器采集的国内岗位（{len(collected)} 个）")
+                # 分别统计
+                complete_jobs = [j for j in collected if j.get("status") == "complete"]
+                basic_jobs = [j for j in collected if j.get("status") != "complete"]
+
+                st.markdown(f"### 📥 浏览器采集的国内岗位（共 {len(collected)} 个）")
+                st.caption(f"🟢 {len(complete_jobs)} 个有完整JD（可导入AI分析） | "
+                          f"🟡 {len(basic_jobs)} 个仅有基本信息（点击职位详情自动补全）")
 
                 for i, cjob in enumerate(collected):
-                    with st.expander(f"#{i+1} {cjob.get('company', '?')} — {cjob.get('title', '?')}"):
+                    status = cjob.get("status", "basic")
+                    status_icon = "🟢" if status == "complete" else "🟡"
+                    has_jd = "已获取" if status == "complete" else "点击查看"
+
+                    with st.expander(
+                        f"{status_icon} [{has_jd}] {cjob.get('company', '?')} — {cjob.get('title', '?')}"
+                    ):
                         col_a, col_b = st.columns([6, 2])
                         with col_a:
                             if cjob.get("salary"):
                                 st.caption(f"💰 {cjob['salary']} | 📍 {cjob.get('location', '')}")
-                            if cjob.get("description"):
-                                st.markdown(cjob.get("description", "")[:400])
+                            desc = cjob.get("description", "")
+                            if desc:
+                                st.markdown(desc[:500] + ("..." if len(desc) > 500 else ""))
+                            else:
+                                st.caption("⚠️ 暂无详细JD — 请在 CDP Chrome 中点击该职位查看详情，JD将自动补全")
+                            if cjob.get("requirements"):
+                                st.caption(f"📋 要求: {cjob['requirements'][:200]}")
+                            if cjob.get("job_url"):
+                                st.markdown(f"[🔗 查看原文]({cjob['job_url']})")
 
                         with col_b:
-                            if st.button("✅ 导入并匹配", key=f"import_dom_{i}", use_container_width=True):
-                                with st.spinner("正在匹配..."):
-                                    jd_parsed = {
-                                        "company": cjob.get("company", ""),
-                                        "title": cjob.get("title", ""),
-                                        "location": cjob.get("location", ""),
-                                        "description": cjob.get("description", ""),
-                                        "source_platform": "boss_auto",
-                                        "job_url": cjob.get("job_url", ""),
-                                    }
-                                    from modules.matcher import JobMatcher
-                                    matcher = JobMatcher(st.session_state.llm_client)
-                                    match = matcher.match_single(
-                                        st.session_state.resume_parsed, jd_parsed,
-                                        st.session_state.get("config", {}).get("preferences", {}),
-                                    )
-                                    tag = _classify_industry(jd_parsed, report)
-                                    st.session_state.all_jobs.insert(0, {
-                                        **jd_parsed, "_match": match, "_industry_tag": tag
-                                    })
-                                    st.success(f"已导入！匹配度: {match.get('overall_score', 0)}")
-                                    st.rerun()
+                            can_import = status == "complete"
+                            btn_label = "✅ 导入并匹配" if can_import else "⏳ 等待JD补全"
+                            btn_help = "将职位导入 AI 分析流程" if can_import else "请在 CDP Chrome 中点击该职位查看详情"
+
+                            if st.button(btn_label, key=f"import_dom_{i}",
+                                         use_container_width=True, disabled=not can_import,
+                                         help=btn_help):
+                                if can_import:
+                                    with st.spinner("正在匹配..."):
+                                        jd_parsed = {
+                                            "company": cjob.get("company", ""),
+                                            "title": cjob.get("title", ""),
+                                            "location": cjob.get("location", ""),
+                                            "description": cjob.get("description", ""),
+                                            "source_platform": "boss_cdp",
+                                            "job_url": cjob.get("job_url", ""),
+                                        }
+                                        from modules.matcher import JobMatcher
+                                        matcher = JobMatcher(st.session_state.llm_client)
+                                        match = matcher.match_single(
+                                            st.session_state.resume_parsed, jd_parsed,
+                                            st.session_state.get("config", {}).get("preferences", {}),
+                                        )
+                                        tag = _classify_industry(jd_parsed, report)
+                                        st.session_state.all_jobs.insert(0, {
+                                            **jd_parsed, "_match": match, "_industry_tag": tag
+                                        })
+                                        st.success(f"已导入！匹配度: {match.get('overall_score', 0)}")
+                                        st.rerun()
     except Exception:
         pass
 

@@ -1,5 +1,5 @@
 """
-本地职位采集接收器 — 接收浏览器脚本发来的国内平台职位数据
+本地职位采集接收器 — 接收 CDP 采集脚本发来的国内平台职位数据
 启动方式: python collector_server.py
 访问: http://localhost:8765
 """
@@ -22,10 +22,26 @@ collected_jobs = []
 
 @app.route("/")
 def index():
+    """首页：系统状态"""
     return jsonify({
         "status": "running",
         "total_collected": len(collected_jobs),
         "last_job": collected_jobs[-1] if collected_jobs else None,
+    })
+
+
+@app.route("/status")
+def status():
+    """状态查询（供 Streamlit 使用）"""
+    by_status = {"basic": 0, "complete": 0}
+    for j in collected_jobs:
+        s = j.get("status", "complete")  # 兼容旧数据
+        by_status[s] = by_status.get(s, 0) + 1
+    return jsonify({
+        "status": "running",
+        "total": len(collected_jobs),
+        "basic": by_status.get("basic", 0),
+        "complete": by_status.get("complete", 0),
     })
 
 
@@ -36,12 +52,9 @@ def debug_raw():
         data = request.get_json(force=True)
         url = data.get("url", "")[:120]
         json_data = data.get("data", {})
-
-        # 只记录包含职位相关字段的请求
         str_data = str(json_data)[:200]
         print(f"🔍 [DEBUG] {url}")
         print(f"   {str_data}")
-
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -49,7 +62,7 @@ def debug_raw():
 
 @app.route("/collect", methods=["POST"])
 def collect_job():
-    """接收浏览器脚本发来的职位数据"""
+    """接收 CDP 脚本发来的基础职位数据"""
     try:
         data = request.get_json(force=True)
 
@@ -63,8 +76,11 @@ def collect_job():
             "description": data.get("description", ""),
             "salary": data.get("salary", ""),
             "job_url": data.get("job_url", ""),
-            "source_platform": data.get("source_platform", "boss"),
+            "job_id": data.get("job_id", ""),
+            "source_platform": data.get("source_platform", "boss_cdp"),
+            "status": data.get("status", "basic"),
             "collected_at": datetime.now().isoformat(),
+            "detail_collected_at": None,
         }
 
         # 去重
@@ -73,12 +89,37 @@ def collect_job():
             return jsonify({"status": "duplicate", "message": "已存在"})
 
         collected_jobs.append(job)
-
-        # 每次收集后保存
         _save_jobs()
 
-        print(f"✅ 收到: {job['company']} - {job['title']}")
+        status_icon = "🟡" if job["status"] == "basic" else "🟢"
+        print(f"{status_icon} [{job['status']}] {job['company']} - {job['title']}")
         return jsonify({"status": "ok", "total": len(collected_jobs)})
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/update", methods=["POST"])
+def update_job():
+    """接收详情补丁：按 job_url 匹配，更新 description"""
+    try:
+        data = request.get_json(force=True)
+        job_url = data.get("job_url", "")
+        if not job_url:
+            return jsonify({"status": "error", "message": "缺少 job_url"}), 400
+
+        for job in collected_jobs:
+            if job.get("job_url") == job_url and job.get("status") != "complete":
+                job["description"] = data.get("description", job.get("description", ""))
+                job["requirements"] = data.get("requirements", "")
+                job["company_info"] = data.get("company_info", "")
+                job["status"] = "complete"
+                job["detail_collected_at"] = datetime.now().isoformat()
+                _save_jobs()
+                print(f"🟢 [补全] {job['company']} - {job['title']} | JD: {len(job['description'])}字")
+                return jsonify({"status": "ok", "updated": True})
+
+        return jsonify({"status": "not_found", "message": "未匹配到对应职位"})
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -131,7 +172,6 @@ def _load_jobs():
 def main():
     port = 8765
 
-    # 加载历史数据
     _load_jobs()
 
     print("=" * 50)
@@ -141,9 +181,9 @@ def main():
     print(f"  📊 已有职位: {len(collected_jobs)} 个")
     print()
     print("  使用方法:")
-    print("  1. 安装 Tampermonkey 浏览器插件")
-    print("  2. 导入 browser_script/ 目录下的用户脚本")
-    print("  3. 正常浏览 Boss直聘/猎聘，脚本自动收集")
+    print("  1. 终端运行: python boss_collector_cdp.py")
+    print("  2. Chrome 自动打开，登录 Boss直聘，正常浏览")
+    print("  3. 本窗口显示接收到的职位数据")
     print()
     print("  ⚠️  关闭此窗口会停止收集")
     print("=" * 50)
