@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "职位猎手 - 自动采集",
-  "version": "1.0",
-  "description": "浏览Boss直聘/猎聘时自动采集职位信息，一键翻页批量抓取",
+  "version": "1.2",
+  "description": "拦截Boss直聘/猎聘的API响应，自动提取职位数据",
   "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": [
     "https://www.zhipin.com/*",
@@ -15,8 +15,9 @@
   "content_scripts": [
     {
       "matches": ["https://www.zhipin.com/*", "https://www.liepin.com/*"],
-      "js": ["content.js"],
-      "run_at": "document_end"
+      "js": ["intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "action": {
