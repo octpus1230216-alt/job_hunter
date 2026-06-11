@@ -30,3 +30,8 @@ output/
 
 # Config with secrets
 config.yaml
+
+# User session data
+data/career_report_*.json
+data/search_tasks/
+.chrome_profile/
