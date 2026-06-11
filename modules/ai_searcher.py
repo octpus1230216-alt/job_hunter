@@ -3,7 +3,7 @@ AI 全网搜索 — 利用搜索引擎+LLM发现公开职位
 """
 
 import json
-import httpx
+import requests
 from pathlib import Path
 from datetime import datetime
 
@@ -67,37 +67,41 @@ class AISearcher:
         """单关键词搜索"""
         results = []
 
-        # 用 DuckDuckGo HTML 搜索
-        url = f"https://html.duckduckgo.com/html/?q={keyword}+jobs+hiring+2026"
-
         try:
-            resp = httpx.get(url, headers={
+            # 用 DuckDuckGo API（比 HTML 抓取更稳定）
+            resp = requests.get("https://api.duckduckgo.com/", params={
+                "q": f"{keyword} jobs hiring",
+                "format": "json",
+                "no_html": 1,
+                "skip_disambig": 1,
+            }, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }, timeout=15, follow_redirects=True)
+            }, timeout=15)
 
             if resp.status_code != 200:
                 return []
 
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(resp.text, "html.parser")
+            data = resp.json()
+            topics = data.get("RelatedTopics", [])
+            if not topics:
+                return []
 
+            # 构造搜索摘要给 LLM 解析
             snippets = []
-            for result in soup.select(".result__body")[:max_results]:
-                title_el = result.select_one(".result__title")
-                snippet_el = result.select_one(".result__snippet")
-                url_el = result.select_one(".result__url")
-
-                if title_el and snippet_el:
-                    snippets.append({
-                        "title": title_el.get_text(strip=True),
-                        "snippet": snippet_el.get_text(strip=True)[:300],
-                        "url": url_el.get_text(strip=True) if url_el else "",
-                    })
+            for t in topics[:max_results]:
+                if isinstance(t, dict):
+                    text = t.get("Text", "") or t.get("Result", "")
+                    url = t.get("FirstURL", "") or t.get("Icon", {}).get("URL", "")
+                    if text:
+                        snippets.append({
+                            "title": text.split(" - ")[0] if " - " in text else text[:50],
+                            "snippet": text[:300],
+                            "url": url,
+                        })
 
             if not snippets:
                 return []
 
-            # 用 LLM 解析搜索结果
             search_text = "\n\n---\n\n".join([
                 f"标题: {s['title']}\n内容: {s['snippet']}\nURL: {s['url']}"
                 for s in snippets
@@ -106,7 +110,6 @@ class AISearcher:
             ai_prompt = AI_SEARCH_PARSE_PROMPT.replace("{search_results}", search_text)
             parsed = self.llm.chat_json(ai_prompt, search_text[:100])
 
-            # 标准化
             for job in parsed:
                 job["description"] = job.get("snippet", "")
                 job["source_platform"] = "ai_search"

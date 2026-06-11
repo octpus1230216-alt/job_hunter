@@ -407,11 +407,11 @@ with tab1:
 with tab2:
     st.markdown("**AI 生成直达搜索 + CDP Chrome 自动导航**")
 
-    # 采集器 + CDP 状态（合并为一行）
+    # 采集器 + CDP 状态
     cdp_running = False
     try:
-        import httpx
-        resp = httpx.get("http://localhost:9999/status", timeout=2)
+        import requests
+        resp = requests.get("http://localhost:9999/status", timeout=2)
         if resp.status_code == 200:
             data = resp.json()
             complete = data.get("complete", 0)
@@ -457,7 +457,7 @@ with tab2:
                             st.warning("⚠️ CDP 脚本未运行，请先在终端执行: python boss_collector_cdp.py")
                         else:
                             try:
-                                resp = httpx.post("http://localhost:9999/navigate",
+                                resp = requests.post("http://localhost:9999/navigate",
                                                   json={"url": boss_url}, timeout=5)
                                 if resp.status_code == 200:
                                     st.success(f"✅ Chrome 已导航: {kw}")
@@ -481,7 +481,7 @@ with tab2:
                             st.warning("⚠️ CDP 脚本未运行")
                         else:
                             try:
-                                resp = httpx.post("http://localhost:9999/navigate",
+                                resp = requests.post("http://localhost:9999/navigate",
                                                   json={"url": boss_url}, timeout=5)
                                 if resp.status_code == 200:
                                     st.success(f"✅ Chrome 已导航: {kw}")
@@ -491,8 +491,8 @@ with tab2:
 
     # 已采集的国内岗位（按状态显示）
     try:
-        import httpx
-        resp = httpx.get("http://localhost:9999/jobs", timeout=2)
+        import requests
+        resp = requests.get("http://localhost:9999/jobs", timeout=2)
         if resp.status_code == 200:
             collected = resp.json().get("jobs", [])
             if collected:
