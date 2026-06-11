@@ -336,7 +336,8 @@ with tab1:
 
     col3, col4 = st.columns(2)
     with col3:
-        if st.button("🚀 前台搜索（等待结果）", use_container_width=True, key="btn_overseas"):
+        if st.button("🚀 开始搜索", use_container_width=True, key="btn_overseas",
+                     help="原地等待搜索结果（可能需要1-3分钟）"):
             terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
             if not terms:
                 st.error("请输入至少一个搜索关键词")
@@ -402,74 +403,35 @@ with tab1:
                         status.update(label="搜索失败", state="error")
                         st.error(f"搜索失败: {str(e)[:200]}")
 
-    with col4:
-        if st.button("🔄 后台搜索（切页不中断）", use_container_width=True, key="btn_bg_overseas",
-                     help="搜索在后台运行，即使切换到其他页面也不会中断"):
-            terms = [t.strip() for t in search_terms.split("\n") if t.strip()]
-            if not terms:
-                st.error("请输入至少一个搜索关键词")
-            else:
-                from search_worker import submit_task
-                country_values = [JOBSPY_COUNTRIES.get(c, c) for c in countries_display]
-                task_id = submit_task("overseas", {
-                    "keywords": terms,
-                    "countries": country_values,
-                    "platforms": platforms,
-                    "hours_old": hours_old,
-                })
-                st.success(f"后台任务已提交: {task_id}")
-                st.info("💡 请在终端运行 `python search_worker.py` 来启动后台工作进程")
-                st.info("💡 搜索完成后，刷新页面在顶部「后台任务」面板中导入结果")
-                st.rerun()
-
 # ---- Tab 2: 国内平台直达搜索 ----
 with tab2:
     st.markdown("**AI 生成直达搜索 + CDP Chrome 自动导航**")
 
-    # 采集器 + CDP 状态
-    col_s1, col_s2, col_s3 = st.columns([2, 2, 1])
-    collector_running = False
+    # 采集器 + CDP 状态（合并为一行）
     cdp_running = False
-
-    with col_s1:
-        try:
-            import httpx
-            resp = httpx.get("http://localhost:9999/status", timeout=2)
-            if resp.status_code == 200:
-                data = resp.json()
-                complete = data.get("complete", 0)
-                basic = data.get("basic", 0)
-                if complete > 0:
-                    st.success(f"✅ 采集器运行中 — 🟢 {complete} 完整 + 🟡 {basic} 基础")
-                else:
-                    st.success(f"✅ 采集器运行中 — 已收集 {data.get('total', 0)} 个岗位")
-                collector_running = True
-        except Exception:
-            st.info("🔌 采集器 (8765) 未启动")
-
-    with col_s2:
-        try:
-            resp = httpx.get("http://localhost:9999/status", timeout=2)
-            if resp.status_code == 200:
-                data = resp.json()
-                st.success(f"✅ CDP Chrome 就绪 — 缓存 {data.get('jobs_cached', 0)} 个职位")
-                cdp_running = True
-        except Exception:
-            st.info("🔌 CDP 脚本 (9999) 未启动")
-
-    with col_s3:
-        if st.button("🔄 刷新", use_container_width=True, key="refresh_status"):
-            st.rerun()
+    try:
+        import httpx
+        resp = httpx.get("http://localhost:9999/status", timeout=2)
+        if resp.status_code == 200:
+            data = resp.json()
+            complete = data.get("complete", 0)
+            basic = data.get("basic", 0)
+            total = data.get("total", 0)
+            if total > 0:
+                st.success(f"✅ CDP 采集器运行中 — 已收集 {total} 个岗位（🟢 {complete} 完整 + 🟡 {basic} 基础）")
+            else:
+                st.success(f"✅ CDP 采集器运行中 — 端口 9999 就绪，等待浏览 Boss直聘 获取数据")
+            cdp_running = True
+    except Exception:
+        st.info("🔌 CDP 采集器未启动。请在另一个 CMD 窗口运行: python boss_collector_cdp.py")
 
     # 安装说明
-    with st.expander("📥 安装采集工具（首次使用需要）"):
+    with st.expander("📥 首次使用说明"):
         st.markdown("""
-        **CDP 网络拦截采集（推荐，3 步启动）**
-        1. 终端1: `python collector_server.py` — 数据接收
-        2. 终端2: `python boss_collector_cdp.py` — CDP Chrome + 指令桥接
+        **二终端启动（详见 `docs/使用说明.md`）**
+        1. 终端1: `python boss_collector_cdp.py` — CDP Chrome + 数据接收（端口 9999）
+        2. 终端2: `streamlit run app.py` — 网页界面（端口 8501）
         3. 在下方点击关键词按钮 → Chrome 自动导航 → 浏览搜索结果 → 详情自动补全
-
-        详见 `docs/使用说明.md`
         """)
 
     # AI 生成的直达搜索链接 → 改为按钮
@@ -740,78 +702,22 @@ with tab4:
                     st.error(f"解析失败: {str(e)[:200]}")
 
 # ============================================================
-# Step 3: 审核挑选
+# Step 3: 去审核挑选（仅跳转提示，实际审核在独立页面）
 # ============================================================
 if st.session_state.all_jobs:
     st.markdown("---")
-    st.subheader(f"📊 Step 3: 审核挑选（共 {len(st.session_state.all_jobs)} 个）")
+    st.subheader(f"📊 Step 3: 审核挑选")
 
-    # 筛选
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        industry_filter = st.selectbox("行业标签", ["全部", "🔵 核心行业", "🟢 可迁移", "🟡 探索"])
-    with col2:
-        channel_filter = st.selectbox("来源渠道", ["全部", "海外平台", "手动粘贴"])
-    with col3:
-        sort_by = st.selectbox("排序", ["按匹配度", "按时间"])
+    job_count = len(st.session_state.all_jobs)
+    already_selected = len(st.session_state.get("selected_jobs", []))
 
-    # 构建展示列表
-    display_jobs = _filter_jobs(st.session_state.all_jobs, industry_filter, channel_filter, sort_by)
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.metric("已发现岗位", job_count)
+    with col_b:
+        st.metric("已选择岗位", already_selected)
 
-    # 按行业标签分组显示
-    if "selected_indices" not in st.session_state:
-        st.session_state.selected_indices = []
+    st.info("👆 岗位已自动进入「📊 审核挑选」页面。点击左侧导航栏进入，按匹配度排序、筛选行业标签。")
 
-    for i, job in enumerate(display_jobs):
-        tag = job.get("_industry_tag", "探索")
-        tag_emoji = {"核心行业": "🔵", "可迁移": "🟢", "探索": "🟡"}.get(tag, "🟡")
-        match_data = job.get("_match", {})
-        score = match_data.get("overall_score", "?")
-
-        with st.expander(
-            f"{tag_emoji} [{score}分] {job.get('company', '?')} — {job.get('title', '?')} "
-            f"({job.get('location', '')})"
-        ):
-            col_a, col_b = st.columns([6, 2])
-            with col_a:
-                desc = job.get("description", "")
-                if desc:
-                    st.markdown(desc[:500] + ("..." if len(desc) > 500 else ""))
-                if job.get("job_url"):
-                    st.markdown(f"[🔗 查看原文]({job.get('job_url')})")
-                if match_data.get("strengths"):
-                    st.markdown(f"**优势:** {', '.join(match_data.get('strengths', []))}")
-                if match_data.get("weaknesses"):
-                    st.markdown(f"**注意:** {', '.join(match_data.get('weaknesses', []))}")
-
-            with col_b:
-                if i in st.session_state.selected_indices:
-                    if st.button("↩️ 取消", key=f"unsel_{i}", use_container_width=True):
-                        st.session_state.selected_indices.remove(i)
-                        st.rerun()
-                else:
-                    if st.button("✅ 选择投递", key=f"sel_{i}", use_container_width=True):
-                        st.session_state.selected_indices.append(i)
-                        st.rerun()
-
-    # 已选汇总
-    if st.session_state.selected_indices:
-        st.markdown("---")
-        st.subheader(f"✅ 已选 {len(st.session_state.selected_indices)} 个岗位")
-
-        selected = [display_jobs[i] for i in st.session_state.selected_indices]
-        for s in selected:
-            st.markdown(f"- **{s.get('company')}** — {s.get('title')}")
-
-        if st.button("🚀 确认选择，去生成简历", use_container_width=True, type="primary"):
-            # 构造标准格式传给生成页
-            st.session_state.selected_jobs = [
-                {"company": s.get("company", ""), "title": s.get("title", ""),
-                 "location": s.get("location", ""), "description": s.get("description", ""),
-                 "source_platform": s.get("source_platform", ""),
-                 "_match_score": s.get("_match", {}).get("overall_score", 0),
-                 "job_url": s.get("job_url", "")}
-                for s in selected
-            ]
-            st.success(f"已选择 {len(selected)} 个岗位，请前往「✨ 生成简历」页面")
-            st.switch_page("pages/04_✨_生成简历.py")
+    if st.button("🚀 前往审核挑选页面", use_container_width=True, type="primary"):
+        st.switch_page("pages/03_📊_审核挑选.py")

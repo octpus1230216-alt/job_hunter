@@ -104,7 +104,7 @@ class AISearcher:
             ])
 
             ai_prompt = AI_SEARCH_PARSE_PROMPT.replace("{search_results}", search_text)
-            parsed = self.llm.chat_json(ai_prompt, ai_prompt)
+            parsed = self.llm.chat_json(ai_prompt, search_text[:100])
 
             # 标准化
             for job in parsed:
