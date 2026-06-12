@@ -58,6 +58,9 @@ collected_jobs = []
 _global_context = None
 _global_pages = []
 
+# 导航队列（HTTP 线程 → 主事件循环的桥梁，避免跨线程 asyncio 问题）
+_nav_queue = None
+
 
 # ============================================================
 # 反检测注入脚本
@@ -381,16 +384,18 @@ class UnifiedHandler(BaseHTTPRequestHandler):
             body = {}
 
         if self.path == "/navigate":
-            # 导航指令
+            # 导航指令：放入队列，由主事件循环消费（避免跨线程 asyncio 问题）
             url = body.get("url", "")
-            if url and _global_pages:
-                asyncio.run_coroutine_threadsafe(
-                    _navigate_page(_global_pages[0], url), asyncio.get_event_loop()
-                )
-                print(f"\n📡 [指令] 导航: {url[:80]}")
+            if url:
+                if _nav_queue is not None:
+                    try:
+                        _nav_queue.put_nowait(url)
+                    except asyncio.QueueFull:
+                        pass
+                print(f"\n📡 [指令] 收到导航请求: {url[:80]}")
                 self._json_response({"ok": True, "msg": f"导航: {url[:80]}"})
             else:
-                self._json_response({"ok": False, "error": "缺少 url 或页面未就绪"}, 400)
+                self._json_response({"ok": False, "error": "缺少 url 参数"}, 400)
 
         elif self.path == "/clear":
             collected_jobs.clear()
@@ -434,13 +439,6 @@ class UnifiedHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
-async def _navigate_page(page, url: str):
-    """导航页面到指定 URL"""
-    try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-        print(f"  ✅ 已导航到: {url[:80]}")
-    except Exception as e:
-        print(f"  ⚠️ 导航失败: {e}")
 
 
 def start_unified_server():
@@ -451,11 +449,23 @@ def start_unified_server():
     server.serve_forever()
 
 
+async def _nav_consumer(queue: asyncio.Queue, page):
+    """后台任务：消费导航队列，在正确的线程中导航"""
+    while True:
+        url = await queue.get()
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            print(f"  ✅ 已导航到: {url[:80]}")
+        except Exception as e:
+            print(f"  ⚠️ 导航失败: {e}")
+        queue.task_done()
+
+
 # ============================================================
 # 主逻辑
 # ============================================================
 async def main():
-    global _global_context, _global_pages
+    global _global_context, _global_pages, _nav_queue
 
     print("=" * 60)
     print("  🔍 Boss直聘 CDP 网络拦截采集器 v3.1 — 二终端")
@@ -508,6 +518,10 @@ async def main():
             print("🌐 正在打开 Boss直聘...")
             await page.goto("https://www.zhipin.com/web/geek/job", wait_until="domcontentloaded")
         print("📄 Boss直聘页面已加载")
+
+        # 导航队列 + 消费者（Streamlit 指令 → 主事件循环导航）
+        _nav_queue = asyncio.Queue(maxsize=10)
+        asyncio.create_task(_nav_consumer(_nav_queue, page))
 
         # ===========================================
         # 网络响应拦截
