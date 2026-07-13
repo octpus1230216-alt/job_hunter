@@ -36,3 +36,6 @@ resume/
 output/
 .chrome_profile/
 .backups/
+# Local rollback bundle (contains OLD history incl. leaked secrets — NEVER push)
+*.bundle
+backup-pre-scrub.bundle
