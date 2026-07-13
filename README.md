@@ -81,7 +81,7 @@ job-hunter/
 └── run_boss_collector.bat   # Windows 一键启动采集器
 ```
 
-> 📌 仓库中 `chrome_extension/`、`browser_script/`、`collector_server.py.archived` 为**历史方案**（已弃用，CDP 方案取代），保留仅供参考。
+> 📌 仓库中 `legacy/` 目录（原 `chrome_extension/`、`browser_script/`、`collector_server.py.archived`）为**历史方案**（已弃用，CDP 方案取代），保留仅供参考。
 
 ---
 
