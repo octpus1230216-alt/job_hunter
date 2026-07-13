@@ -24,14 +24,14 @@ env/
 .DS_Store
 Thumbs.db
 
-# Project data (user-specific)
+# Private user data (NEVER commit)
+config.yaml
+data/resume_parsed.json
+data/career_report_*.json
+data/companies/
+data/search_tasks/
+data/daily_digests/
+data/domestic_jobs/
 resume/
 output/
-
-# Config with secrets
-config.yaml
-
-# User session data
-data/career_report_*.json
-data/search_tasks/
 .chrome_profile/

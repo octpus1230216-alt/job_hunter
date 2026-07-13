@@ -1,0 +1,81 @@
+# 求职助手配置模板
+# 复制此文件为 config.yaml 后填入你的信息
+# config.yaml 不会被 git 追踪（已在 .gitignore 中）
+
+llm:
+  provider: deepseek              # deepseek / openai / ollama
+  deepseek:
+    api_key: ""                   # 填入你的 DeepSeek API Key
+    base_url: https://api.deepseek.com
+    model: deepseek-chat
+  openai:
+    api_key: ""                   # 填入你的 OpenAI API Key
+    base_url: https://api.openai.com/v1
+    model: gpt-4o
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5:14b
+
+personal:
+  name: ""
+  email: ""
+  phone: ""
+  location: ""
+  linkedin: ""
+  github: ""
+  website: ""
+
+preferences:
+  target_roles: []
+  locations: []
+  industries: []
+  job_types:
+    - 全职
+  remote_preference: no_preference
+  salary_min: 15
+  salary_max: 50
+  company_size: no_preference
+  exclude_levels:
+    - 实习生
+    - 初级
+
+discovery:
+  overseas:
+    search_terms:
+      - software engineer
+      - backend developer
+      - full stack developer
+    countries:
+      - US
+      - GB
+      - DE
+      - SG
+      - JP
+    max_results: 200
+    hours_old: 168
+    proxy: ""
+  domestic:
+    auto_parse: true
+  company_discovery:
+    enabled: true
+    depth: medium
+    industry_keywords:
+      - top AI startups
+      - best fintech companies
+      - fastest growing tech companies
+      - best remote-first companies
+      - tech companies hiring
+
+company_requirements:
+  accept_outsourcing: false
+  accept_startups: false
+  min_rating: 3.5
+  require_salary_range: false
+  require_remote_option: false
+  blacklist: []
+  whitelist: []
+
+output:
+  resume_format: html
+  bilingual: true
+  naming: '{company}_{role}_{date}'
