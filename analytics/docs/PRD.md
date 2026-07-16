@@ -66,7 +66,7 @@
 | 编号 | 功能 | 优先级 | 状态 | 服务目标 | 实现文件 |
 |---|---|---|---|---|---|
 | FR1 | 多源录入"我的投递结果" / 新 JD（prospect 状态） | P0 | ✅ | A + B | `collect.py` |
-| FR2 | 五维匹配度评分 | P0 | ✅ | 共享 | `score.py` |
+| FR2 | 七维匹配度评分（+公司竞争力/真实概率） | P0 | ✅ | 共享 | `score.py` |
 | FR3 | 结果看板（统计） | P0 | ✅ | B | `analyzer.py` |
 | FR4 | fit×outcome 交叉分析 | P0 | ✅ | B | `analyzer.py` |
 | FR5 | JD 差距分析 | P0 | ✅ | B→A | `analyzer.py` |
@@ -88,9 +88,9 @@
   - `scraper` 爬虫占位接口（不实现具体爬取，仅展示扩展位）。
 - **规则**：`company` 与 `role` 为必填；入库同时写归档 `data/applications/<company>_<role>/`。`prospect` 记录不参与目标 B 的"已投递复盘"统计与 A/B 回复率计算，仅在目标 A 链路中被 `score --profile` 与 `revise` 引用。
 
-### FR2 五维匹配度评分
-- **描述**：对每条投递记录打五维分，加权出 `fit_overall`，写入记录。
-- **五维**：技能 / 经验 / 文化 / 地点(PASS/FAIL/FLAG) / 职业契合，各 0–100。
+### FR2 七维匹配度评分（+公司竞争力 / 真实概率）
+- **描述**：对每条投递记录打七维分，加权出 `fit_overall`，并写入 `competition_level` / `realistic_prob`，写入记录。
+- **七维（各 0–100，权重 技0.24/经0.20/文0.12/职0.24/背0.12/薪0.04/级0.04）**：技能 / 经验 / 文化 / 职业 / 背景契合 / 薪资期望匹配 / 目标层级匹配；地点(PASS/FAIL/FLAG) 不加权。另设 `competition_level`（公司竞争力档位）与 `realistic_prob`（= `fit_overall` × 竞争力因子，真实通过概率）。
 - **权重**：技能 30% · 经验 25% · 文化 15% · 职业 30%；地点不参与加权。
 - **模式**：`--mode heuristic`（离线默认，关键词重叠代理）/ `--mode llm`（直连，需 key）/ `--export-prompt`（打印贴 WorkBuddy 的提示词）。
 - **规则**：`--all` 默认只评 `fit_overall` 为空者，避免覆盖 LLM/人工预填精准分。

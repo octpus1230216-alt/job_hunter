@@ -16,7 +16,7 @@ from pathlib import Path
 
 from modules.store import (
     DEFAULT_DB, STRONG_SIGNAL, WEAK_SIGNAL, init_db, get_all, get_by_status,
-    get_resume, count_by, fit_outcome_cross, resume_ab,
+    get_resume, count_by, fit_outcome_cross, resume_ab, competition_breakdown,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -49,6 +49,21 @@ def _print_cross(conn) -> str:
         else:
             signal = ""
         lines.append(f"| {band} | {status} | {n} | {signal} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _print_competition(conn) -> str:
+    rows = competition_breakdown(conn)
+    if not rows:
+        return ("## 二·五、公司竞争力 × fit\n\n"
+                "（暂无 competition_level 记录；运行 `score.py` 会自动按公司名推断，或采集时显式录入）")
+    lines = ["## 二·五、公司竞争力 × fit", "",
+             "> 不同公司竞争强度不同（字节/腾讯顶级厂 vs 天使轮小厂），同一 fit 的真实命中率差异很大。"
+             "分析时应看 `realistic_prob`，而非单纯 `fit_overall`。", "",
+             "| 竞争力档位 | 投递数 | 平均 fit | 过筛+ |", "|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['competition_level']} | {r['n']} | {r['avg_fit']} | {r['positive']} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -120,6 +135,7 @@ def build_report(conn, mode: str) -> str:
         "# 求职复盘分析报告",
         _print_stats(conn),
         _print_cross(conn),
+        _print_competition(conn),
         _gap_section(conn, mode),
         _print_ab(conn),
         "---\n*诚实不虚构；已读不回=弱信号，不据此大改简历。*",

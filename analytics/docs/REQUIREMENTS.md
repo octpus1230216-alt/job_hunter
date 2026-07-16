@@ -27,23 +27,29 @@
   - CSV 空字符串字段 → 转为 NULL。
 - **关联**：`collect.py`、DESIGN_SPEC §4（状态机）、§11（架构评估）
 
-## FR2 五维匹配度评分
+## FR2 七维匹配度评分（+公司竞争力/真实概率）
 
-- **优先级**：P0 · **状态**：✅ 已实现
-- **输入**：`--id <N>` 或 `--all`；`--mode heuristic|llm`；`--export-prompt`；`--profile <file>`（默认取最新简历）。
+- **优先级**：P0 · **状态**：✅ 已实现（v1.1 由五维扩展为七维，并新增公司竞争力维度）
+- **输入**：`--id <N>` 或 `--all`；`--mode heuristic|llm`；`--export-prompt`；`--profile <file>`（默认取该投递的 `resume_version`，否则最新简历）。
+- **七维**：技能 / 经验 / 文化 / 职业 / **背景契合** / **薪资期望匹配** / **目标层级匹配**（各 0–100，权重 0.24/0.20/0.12/0.24/0.12/0.04/0.04）。
+- **额外维度（不计入 fit）**：
+  - `competition_level`（公司竞争力档位：顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知）——同一 fit 在顶级厂真实命中率更低；
+  - `realistic_prob` = `fit_overall × 竞争力因子`（顶级厂0.30 / 一线0.50 / 中厂0.70 / 初创0.90 / 未知0.60）——真实通过概率估计。
 - **处理逻辑**：
-  - `heuristic`：JD 与简历关键词重叠率 → 五维分（基线）；
-  - `llm`：调 OpenAI 兼容接口返回 JSON → 五维分；
+  - `heuristic`：JD 与简历关键词重叠率 → 七维分（基线）；薪资/层级用简单规则解析；公司竞争力按名推断；
+  - `llm`：调 OpenAI 兼容接口返回 JSON → 七维分 + competition_level + realistic_prob；
   - `export-prompt`：打印评分提示词，不调接口、不写库。
 - **验收标准**：
-  1. 五维分写入 `fit_technical/experience/behavioral/career` 与 `fit_location`，`fit_overall` 按权重计算。
-  2. `--all` 只评 `fit_overall IS NULL` 的记录，不覆盖已评分/预填值。
-  3. `--id <N>` 强制重评指定记录。
-  4. `llm` 缺 `openai` 包或 `OPENAI_API_KEY` 时明确报错退出，不静默失败。
+  1. 七维分写入 `fit_technical/experience/behavioral/career/background/salary/level` 与 `fit_location`，`fit_overall` 按权重计算，`competition_level`/`realistic_prob` 一并写入。
+  2. 评分时优先读取该投递记录的 `resume_version` 文本做对照（保证 A/B 准确），无则回退最新简历。
+  3. `--all` 只评 `fit_overall IS NULL` 的记录，不覆盖已评分/预填值。
+  4. `--id <N>` 强制重评指定记录。
+  5. `llm` 缺 `openai` 包或 `OPENAI_API_KEY` 时明确报错退出，不静默失败。
 - **边界/异常**：
   - JD 或简历为空 → heuristic 给中性默认分（约 50）。
   - 权重合计 = 1.0，地点不参与加权。
-- **关联**：`score.py`、`store.update_fit`
+- **关联**：`score.py`、`store.update_fit`、`store.infer_competition`、`store.competition_breakdown`
+- **变更说明**：v1.0 为五维（技能/经验/文化/职业/地点）；v1.1 扩出背景契合/薪资匹配/层级匹配三维并新增公司竞争力维度——复盘数据证明"技能重叠高却仍被拒"多由背景契合、薪资期望错配、目标层级错配、公司竞争激烈导致，原五维无法捕捉。
 
 ## FR3 结果看板（统计）
 
@@ -155,7 +161,7 @@
 | FR | 优先级 | 服务目标 | 验收状态 |
 |---|---|---|---|
 | FR1 多源录入 | P0 | A + B | ✅ 4 适配器；`prospect` 状态 + 复盘口径过滤已落地（见 DESIGN_SPEC §11） |
-| FR2 五维评分 | P0 | 共享 | ✅ 三模式 + 权重 + 防覆盖 |
+| FR2 七维评分(+竞争力) | P0 | 共享 | ✅ 三模式 + 七维权重 + 竞争力/真实概率 + 防覆盖 |
 | FR3 结果看板 | P0 | B | ✅ 四类分组 |
 | FR4 交叉分析 | P0 | B | ✅ 强/弱信号高亮（demo 命中 2 条） |
 | FR5 JD 差距 | P0 | B→A | ✅ 导出提示词 + 约束 |

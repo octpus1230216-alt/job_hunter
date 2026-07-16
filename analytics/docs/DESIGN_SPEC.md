@@ -17,7 +17,7 @@
         ┌──────────────┬──────────────┬────────┴────────┬──────────────┐
         ▼              ▼              ▼                  ▼              ▼
      score.py      analyzer.py     revise.py         export.py      (A/B 统计)
-   五维评分        统计+交叉+差距   对照JD改简历      LaTeX+ATS校验    resume_ab()
+   七维评分        统计+交叉+差距   对照JD改简历      LaTeX+ATS校验    resume_ab()
         │              │              │                  │
         └──────────────┴───── 双通道 ┴──────────────────┘
               export(贴WorkBuddy) / heuristic(本地) / llm(直连,需key)
@@ -28,7 +28,7 @@
 **双主线复用同一底座**：本产品服务两个目标，但**不需要两套架构**——
 - **目标 A（前瞻）**：`collect`(prospect) → `score --profile`(对照原简历) → `revise` → `export`，终点是"改好的简历"。
 - **目标 B（复盘）**：`collect`(已投结果) → `score` → `analyzer`(统计/交叉/A-B)，终点是"复盘结论"。
-- 二者共享 `ingest_resume`(原简历基准)、`store`(单一数据源)、五维评分模型、双通道策略。区别仅在入口记录的状态（`prospect` vs 真实结果）与终点产物。架构评估结论见 §11。
+- 二者共享 `ingest_resume`(原简历基准)、`store`(单一数据源)、七维评分模型、双通道策略。区别仅在入口记录的状态（`prospect` vs 真实结果）与终点产物。架构评估结论见 §11。
 
 ## 2. 目录结构
 
@@ -36,7 +36,7 @@
 analytics/
 ├── collect.py              # 多源录入（4 适配器）
 ├── ingest_resume.py        # 原简历上传与解析（doc/pdf/txt → 文本，📝 待实现）
-├── score.py                # 五维评分（双通道）
+├── score.py                # 七维评分（双通道）
 ├── analyzer.py             # 统计 + 交叉 + 差距 + A/B
 ├── revise.py               # 对照 JD 改简历（三模式）
 ├── export.py               # LaTeX 生成 + ATS 校验
@@ -74,11 +74,16 @@ analytics/
 | `resume_version` | TEXT | | A/B 变量：用的第几版简历 |
 | `last_status` | TEXT | ✅ | 结果状态（见 §4） |
 | `status_date` | TEXT | | 状态更新日期 |
-| `fit_technical` | INTEGER | | 五维·技能 0–100 |
-| `fit_experience` | INTEGER | | 五维·经验 0–100 |
-| `fit_behavioral` | INTEGER | | 五维·文化 0–100 |
-| `fit_location` | TEXT | | 地点：PASS / FAIL / FLAG |
-| `fit_career` | INTEGER | | 五维·职业 0–100 |
+| `fit_technical` | INTEGER | | 七维·技能 0–100 |
+| `fit_experience` | INTEGER | | 七维·经验 0–100 |
+| `fit_behavioral` | INTEGER | | 七维·文化 0–100 |
+| `fit_location` | TEXT | | 地点：PASS / FAIL / FLAG（不加权） |
+| `fit_career` | INTEGER | | 七维·职业 0–100 |
+| `fit_background` | INTEGER | | 七维·背景/领域契合 0–100（新增） |
+| `fit_salary` | INTEGER | | 七维·薪资期望匹配 0–100（新增） |
+| `fit_level` | INTEGER | | 七维·目标层级匹配 0–100（新增） |
+| `competition_level` | TEXT | | 公司竞争力档位：顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知（不计入 fit） |
+| `realistic_prob` | INTEGER | | 真实通过概率估计 0–100 = fit_overall × 竞争力因子（顶级厂0.30/一线0.50/中厂0.70/初创0.90/未知0.60） |
 | `fit_overall` | INTEGER | | 加权总分 0–100 |
 | `job_quality` | INTEGER | | 岗位本身好坏 1–5（手动，不参与匹配） |
 | `notes` | TEXT | | 备注 |
@@ -107,21 +112,26 @@ analytics/
 
 **流转规则**：状态由用户录入/更新（`set_status`），系统不自动流转；分析时按"强/弱信号"分桶，而非按时间线强制推进。
 
-## 5. 五维评分模型
+## 5. 七维评分模型（+公司竞争力 / 真实概率）
 
 | 维度 | 字段 | 权重 | 取值 |
 |---|---|---|---|
-| 技能 Technical | `fit_technical` | 30% | 0–100 |
-| 经验 Experience | `fit_experience` | 25% | 0–100 |
-| 文化 Behavioral | `fit_behavioral` | 15% | 0–100 |
-| 职业 Career | `fit_career` | 30% | 0–100 |
+| 技能 Technical | `fit_technical` | 24% | 0–100 |
+| 经验 Experience | `fit_experience` | 20% | 0–100 |
+| 文化 Behavioral | `fit_behavioral` | 12% | 0–100 |
+| 职业 Career | `fit_career` | 24% | 0–100 |
+| 背景契合 Background | `fit_background` | 12% | 0–100（新增：领域/项目背景隐性契合） |
+| 薪资匹配 Salary | `fit_salary` | 4% | 0–100（新增：期望 vs 岗位区间） |
+| 层级匹配 Level | `fit_level` | 4% | 0–100（新增：岗位级别 vs 资历） |
 | 地点 Location | `fit_location` | 不加权 | PASS / FAIL / FLAG |
 
-**总分**：`fit_overall = round(技*0.30 + 经*0.25 + 文*0.15 + 职*0.30)`
+**总分**：`fit_overall = round(技*0.24 + 经*0.20 + 文*0.12 + 职*0.24 + 背*0.12 + 薪*0.04 + 级*0.04)`
+
+**公司竞争力（不计入 fit）**：同一 fit 在顶级厂真实命中率更低。`competition_level`（顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知）由 `store.infer_competition` 依公司名推断或 `collect` 显式录入；`realistic_prob = round(fit_overall × 竞争力因子)`，因子：顶级厂0.30 / 一线0.50 / 中厂0.70 / 初创0.90 / 未知0.60。复盘应以 `realistic_prob` 而非单纯 `fit_overall` 判断真实命中率。
 
 **分档（交叉分析用）**：Strong(≥75) / Good(60–74) / Moderate(45–59) / Weak(30–44) / Poor(<30)
 
-**heuristic 模式说明**：无 LLM 时以"JD 与简历关键词重叠率"作代理（`overlap→30~95` 映射），文化给中性 55，地点默认 PASS。**这是基线，非真实评分**；真实评分用 `--mode llm` 或 `--export-prompt`。
+**heuristic 模式说明**：无 LLM 时以"JD 与简历关键词重叠率"作代理（`overlap→30~95` 映射），文化/背景给中性分，薪资/层级用简单规则解析，公司竞争力按名推断，地点默认 PASS。**这是基线，非真实评分**；真实评分用 `--mode llm` 或 `--export-prompt`。
 
 ## 6. 双通道架构
 
@@ -145,7 +155,7 @@ analytics/
 - `init_db(db_path=DEFAULT_DB) -> Connection`
 - `add_application(**fields) -> int`（自动补 `archive_path`）
 - `get_all() / get_by_id(id) / get_by_status(list) / get_unscored()`
-- `update_fit(id, *, technical, experience, behavioral, location, career, overall)`
+- `update_fit(id, *, technical, experience, behavioral, location, career, background, salary, level, competition, overall, realistic)`
 - `set_status(id, status, status_date)`
 - `add_resume(version, text, created_date, change_log)`
 - `get_resume(version) / get_latest_resume()`
@@ -163,7 +173,7 @@ analytics/
 ### 7.3 `score.py`
 - `python score.py --all [--mode heuristic|llm] [--profile <file>]`
 - `python score.py --id <N> [--mode llm] [--export-prompt] [--profile <file>]`
-- 核心：`heuristic_score(jd, profile) -> dict` / `score_with_llm(row, profile) -> dict` / `build_llm_prompt(...)`
+- 核心：`heuristic_score(jd, profile, company) -> dict` / `score_with_llm(row, profile) -> dict` / `build_llm_prompt(...)`；评分时优先读取该投递记录的 `resume_version` 文本做对照（保证 A/B 准确）
 
 ### 7.4 `analyzer.py`
 - `python analyzer.py [--mode export|llm] [--out <md>]`
@@ -227,7 +237,7 @@ analytics/
 | 维度 | 评估 | 是否需要改 |
 |---|---|---|
 | 数据存储 | `store` + SQLite 单一数据源，A/B 两主线共用，无需分库 | 否 |
-| 五维评分模型 | `score` 同时服务"评估新 JD"与"给已投结果打分"，模型通用 | 否 |
+| 七维评分模型（含公司竞争力） | `score` 同时服务"评估新 JD"与"给已投结果打分"，模型通用 | 否 |
 | 双通道策略 | export/heuristic/llm 三模式贯穿 score/revise，两主线通用 | 否 |
 | 原简历基准 | `ingest_resume` 已落地，A 作起点、B 作参照 | 否 |
 | 新 JD 的入口 | 当前"分析一个新岗位"需先建一条 application 记录，但 `status` 缺"尚未投递/待评估"语义，易与"已投递复盘"数据混淆 | ✅ 已加 `prospect` |
@@ -243,4 +253,4 @@ analytics/
 - 不拆 `jobs` 表与 `applications` 表：MVP 阶段单表 + `prospect` 状态即可清晰区分，拆分会带来存储抽象与迁移成本，留待合并进主仓时再考虑（见 §10）。
 - 不为目标 A 单独做"JD 分析页"：复用 `collect`(prospect) + `score --profile` + `revise` + `export` 已能跑通，等 Streamlit 看板时再聚合。
 
-**一句话**：底座（store / 五维模型 / 双通道 / 原简历）两目标通用；唯一要补的是"新 JD 用 `prospect` 状态入场 + 复盘统计排除 `prospect`"，属小修，不重构。
+**一句话**：底座（store / 七维模型 / 双通道 / 原简历）两目标通用；唯一要补的是"新 JD 用 `prospect` 状态入场 + 复盘统计排除 `prospect`"，属小修，不重构。

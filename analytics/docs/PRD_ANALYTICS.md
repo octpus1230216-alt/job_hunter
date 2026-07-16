@@ -21,14 +21,14 @@
 ## 4. 数据模型变更（建议扩展现有追踪存储）
 `applications` 增加字段：
 - `last_status` 枚举新增 `rejected`(不合适) / `no_response`(已读不回) / `interview_only`
-- 五维评分：`fit_technical / fit_experience / fit_behavioral / fit_location(PASS/FAIL/FLAG) / fit_career`，加权 `fit_overall`
+- 七维评分：`fit_technical / fit_experience / fit_behavioral / fit_career / fit_background(背景契合) / fit_salary(薪资匹配) / fit_level(层级匹配)`，加权 `fit_overall`；另 `competition_level`(公司竞争力) / `realistic_prob`(真实概率)
 - `job_quality`(1–5 手动，岗位本身好坏)
 - `resume_version`（关联 `resumes`，A/B 变量）、`jd_text`、`hr_reply`
 - 归档：`data/applications/<company>_<role>/{job_posting.md, outcome.md}`（借 MadsLorentzen 约定）
 
 ## 5. 功能需求
 - **FR1 多源录入**：手动 / CSV / 截图 OCR（视觉 LLM 抽字段，确认后入库）/ 爬虫占位接口。
-- **FR2 五维评分**：对齐 MadsLorentzen 五维（技能30/经验25/文化15/职业30 + 地点不加权）；子分写入投递记录。
+- **FR2 七维评分（+公司竞争力）**：在 MadsLorentzen 五维基础上扩出背景契合/薪资匹配/层级匹配三维，并新增公司竞争力档位与真实通过概率；子分写入投递记录。
 - **FR3 结果看板**：状态 / 平台 / 级别 / 行业 占比。
 - **FR4 fit×outcome 交叉**：高亮「高 fit + 不合适/已读不回」。
 - **FR5 JD 差距分析**：对 rejected/no_response，拉 JD + 当时简历版本，列缺失技能/关键词与表述短板，给可替换段落。双通道（导出提示词贴 WorkBuddy / LLM 直连）。
@@ -37,7 +37,7 @@
 - **FR8 导出与 ATS（Phase 2）**：简历 LaTeX 生成 + ATS 关键词覆盖率校验。✅ 已实现（`export.py`：`--compile` 出 PDF、`--ats` 覆盖率表）。
 
 ## 6. 模块与页面
-- `modules/analyzer.py`：统计 + 交叉 + 差距（调用 `llm.py`、`matcher.py`/五维、`resume_parser.py`）。
+- `modules/analyzer.py`：统计 + 交叉 + 差距（调用 `llm.py`、`matcher.py`/七维、`resume_parser.py`）。
 - `collect.py` / `score.py`：录入与评分。
 - `pages/07_📉_复盘分析.py`：看板 + 交叉表 + 差距清单 + 建议区（待加）。
 - 双通道：复用现有 `llm.py`（DeepSeek/OpenAI/Ollama）；无 key 时导出提示词贴 WorkBuddy。
@@ -58,7 +58,7 @@
 | 需求 | 文件 | 状态 |
 |---|---|---|
 | FR1 多源录入 | `collect.py` | ✅ 手动/CSV/截图OCR/爬虫占位 |
-| FR2 五维评分 | `score.py` | ✅ heuristic 默认 + LLM/导出提示词双通道 |
+| FR2 七维评分(+竞争力) | `score.py` | ✅ heuristic 默认 + LLM/导出提示词双通道 |
 | FR3 结果看板 | `analyzer.py` | ✅ 状态/平台/级别/行业占比 |
 | FR4 fit×outcome 交叉 | `analyzer.py` | ✅ 高亮「高 fit+不合适/已读不回」 |
 | FR5 JD 差距分析 | `analyzer.py` | ✅ 导出提示词贴 WorkBuddy / LLM 预留 |

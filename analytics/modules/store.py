@@ -36,12 +36,54 @@ STATUS_ENUM = [
 # 不能算进「已投结果」的分布 / 交叉 / A-B 回复率，否则污染目标 B 结论。
 EXCLUDE_FROM_REVIEW = {"prospect"}
 
-# 五维评分字段（借 MadsLorentzen 04-job-evaluation.md）
-FIT_DIMS = ["fit_technical", "fit_experience", "fit_behavioral", "fit_career"]
+# 七维评分字段（在 MadsLorentzen 五维基础上，扩出"背景契合/薪资匹配/层级匹配"三维度，
+# 以捕捉"技能重叠高却仍被拒"的真实因素——领域/背景契合、薪资期望错配、目标层级错配）
+FIT_DIMS = ["fit_technical", "fit_experience", "fit_behavioral",
+            "fit_career", "fit_background", "fit_salary", "fit_level"]
 FIT_LOCATION = "fit_location"  # PASS / FAIL / FLAG
 
-# 加权（技30/经25/文15/职30；location 不参与加权）
-WEIGHTS = {"fit_technical": 0.30, "fit_experience": 0.25, "fit_behavioral": 0.15, "fit_career": 0.30}
+# 加权（location 不参与加权；七维合计 = 1.0）
+WEIGHTS = {
+    "fit_technical": 0.24,   # 技能
+    "fit_experience": 0.20,  # 经验
+    "fit_behavioral": 0.12,  # 文化
+    "fit_career": 0.24,      # 职业
+    "fit_background": 0.12,  # 背景/领域契合（新增）
+    "fit_salary": 0.04,      # 薪资期望匹配（新增）
+    "fit_level": 0.04,       # 目标层级匹配（新增）
+}
+
+# 公司竞争力档位：决定"真实通过概率"的调节因子，不直接计入 candidate fit。
+# 不同公司竞争强度不同（字节/腾讯顶级厂 vs 天使轮小厂），同一 fit 在顶级厂的真实命中率更低。
+COMPETITION_LEVELS = ["顶级厂", "一线大厂", "中厂/B轮/C轮", "初创/天使轮", "未知"]
+COMPETITION_FACTOR = {
+    "顶级厂": 0.30,
+    "一线大厂": 0.50,
+    "中厂/B轮/C轮": 0.70,
+    "初创/天使轮": 0.90,
+    "未知": 0.60,
+}
+# 顶级厂关键词（子集匹配，命中即归顶级厂）；未命中再按"轮次"判初创/中厂，否则归未知
+_TOP_TIER = ["字节", "抖音", "腾讯", "阿里", "百度", "美团", "快手", "deepseek", "智谱",
+            "昆仑万维", "蚂蚁", "京东", "拼多多", "网易", "华为", "小米", "滴滴", "联想",
+            "携程", "贝壳", "小红书", "哔哩", "bytedance", "tencent", "alibaba", "baidu",
+            "meituan", "kuaishou", "xiaohongshu", "bilibili", "字节跳动", "阿里巴巴"]
+_ROUND_MARKERS = ["天使", "种子", "pre-a", "prea", "a轮", "b轮", "c轮", "d轮", "轮"]
+
+
+def infer_competition(company: str) -> str:
+    """依公司名粗判竞争力档位（启发式；collect 可显式覆盖 competition_level）。"""
+    if not company:
+        return "未知"
+    low = company.lower()
+    if any(k in low for k in _TOP_TIER):
+        return "顶级厂"
+    if any(m in low for m in _ROUND_MARKERS):
+        # 含"轮"→融资阶段公司；天使/种子视为初创，其余中厂
+        if any(m in low for m in ("天使", "种子", "pre-a", "prea")):
+            return "初创/天使轮"
+        return "中厂/B轮/C轮"
+    return "未知"
 
 # 强信号状态：这些才是"信息量大"的主动拒绝，重点分析
 STRONG_SIGNAL = {"rejected"}
@@ -75,7 +117,12 @@ def init_db(db_path: Path = DEFAULT_DB) -> sqlite3.Connection:
             fit_behavioral INTEGER,
             fit_location  TEXT,                       -- PASS / FAIL / FLAG
             fit_career    INTEGER,
+            fit_background INTEGER,                   -- 七维·背景/领域契合 0-100（新增）
+            fit_salary    INTEGER,                    -- 七维·薪资期望匹配 0-100（新增）
+            fit_level     INTEGER,                    -- 七维·目标层级匹配 0-100（新增）
             fit_overall   INTEGER,                    -- 加权总分 0-100
+            competition_level TEXT,                   -- 公司竞争力档位（新增，不计入 fit）
+            realistic_prob INTEGER,                   -- 真实通过概率估计 0-100 = fit_overall × 竞争力因子（新增）
             job_quality   INTEGER,                    -- 岗位本身好坏 1-5（手动）
             notes         TEXT,
             archive_path  TEXT                        -- documents/applications/<company>_<role>/
@@ -95,6 +142,7 @@ def init_db(db_path: Path = DEFAULT_DB) -> sqlite3.Connection:
         """
     )
     _migrate_resume_columns(conn)  # 兼容旧库：补 source_file / source_format
+    _migrate_application_columns(conn)  # 兼容旧库：补七维扩展列 + 竞争力列
     conn.commit()
     return conn
 
@@ -105,6 +153,18 @@ def _migrate_resume_columns(conn: sqlite3.Connection) -> None:
     for col in ("source_file", "source_format"):
         if col not in existing:
             conn.execute(f"ALTER TABLE resumes ADD COLUMN {col} TEXT")
+
+
+def _migrate_application_columns(conn: sqlite3.Connection) -> None:
+    """兼容旧库：applications 表若缺七维扩展列/竞争力列，则补列。"""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(applications)").fetchall()}
+    for col in ("fit_background", "fit_salary", "fit_level",
+                "competition_level", "realistic_prob"):
+        if col not in existing:
+            if col == "competition_level":
+                conn.execute(f"ALTER TABLE applications ADD COLUMN {col} TEXT")
+            else:
+                conn.execute(f"ALTER TABLE applications ADD COLUMN {col} INTEGER")
 
 
 def _archive_slug(company: str, role: str) -> str:
@@ -147,13 +207,18 @@ def get_by_id(conn: sqlite3.Connection, app_id: int) -> Optional[sqlite3.Row]:
 
 def update_fit(conn: sqlite3.Connection, app_id: int, *,
                technical=None, experience=None, behavioral=None,
-               location=None, career=None, overall=None) -> None:
-    """回写五维评分（score.py 调用）。"""
+               location=None, career=None, background=None,
+               salary=None, level=None, competition=None,
+               overall=None, realistic=None) -> None:
+    """回写七维评分 + 竞争力（score.py 调用）。"""
     sets, vals = [], []
     mapping = {
         "fit_technical": technical, "fit_experience": experience,
         "fit_behavioral": behavioral, "fit_location": location,
-        "fit_career": career, "fit_overall": overall,
+        "fit_career": career, "fit_background": background,
+        "fit_salary": salary, "fit_level": level,
+        "competition_level": competition, "fit_overall": overall,
+        "realistic_prob": realistic,
     }
     for col, val in mapping.items():
         if val is not None:
@@ -229,6 +294,27 @@ def fit_outcome_cross(conn: sqlite3.Connection, exclude_prospect: bool = True) -
         WHERE fit_overall IS NOT NULL{extra}
         GROUP BY fit_band, last_status
         ORDER BY fit_band, n DESC
+        """
+    ).fetchall()
+
+
+def competition_breakdown(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """公司竞争力档位 × fit / 过筛数（呼应：不同公司竞争强度不同，同一 fit 真实命中率不同）。
+
+    过筛 = interview / offer / hired / offer_declined / screened（进入面试或更好）。
+    """
+    return conn.execute(
+        """
+        SELECT competition_level,
+               COUNT(*)                                          AS n,
+               ROUND(AVG(fit_overall), 1)                        AS avg_fit,
+               SUM(CASE WHEN last_status IN
+                   ('interview','offer','hired','offer_declined','screened') THEN 1 ELSE 0 END) AS positive
+        FROM applications
+        WHERE competition_level IS NOT NULL AND competition_level <> ''
+          AND fit_overall IS NOT NULL
+        GROUP BY competition_level
+        ORDER BY n DESC
         """
     ).fetchall()
 
