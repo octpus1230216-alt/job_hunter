@@ -1,0 +1,4 @@
+platform,company,sector,role,role_type,channel,applied_date,source_url,jd_text,hr_reply,resume_version,last_status,status_date,job_quality,notes
+BOSS,示例科技,互联网,数据分析师,中级,主动沟通,2026-07-01,https://example.com/jd/1,要求SQL/Python/可视化，3年以上经验,,"v1",rejected,2026-07-05,3,技能不匹配
+脉脉,某某金融,金融,数据产品经理,高级,猎头推荐,2026-07-02,https://example.com/jd/2,要求指标体系搭建、AB实验,,"v1",no_response,,4,已读不回
+BOSS,成长型企业,电商,运营专员,初级,海投,2026-07-03,https://example.com/jd/3,要求活动策划、社群运营,,"v2",interview,2026-07-10,3,进入面试

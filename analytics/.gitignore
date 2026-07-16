@@ -1,0 +1,22 @@
+# 个人数据：投递记录、简历正文、归档、数据库 —— 不入库
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# 编译产物
+*.pdf
+*.aux
+*.log
+*.out
+.DS_Store
+
+# 本地环境
+.env
