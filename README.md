@@ -78,10 +78,23 @@ job-hunter/
 │   └── discovery/           # 职位发现（overseas.py / company_finder.py）
 ├── docs/                     # 设计文档（中文）
 │   ├── PRD.md / DESIGN_SPEC.md / BOUNDARY_RULES.md / INTERACTION_STATES.md
+├── analytics/                # 复盘分析模块：收集投递结果→分析→对照改简历（详见 analytics/README.md）
 └── run_boss_collector.bat   # Windows 一键启动采集器
 ```
 
 > 📌 仓库中 `legacy/` 目录（原 `chrome_extension/`、`browser_script/`、`collector_server.py.archived`）为**历史方案**（已弃用，CDP 方案取代），保留仅供参考。
+
+---
+
+## 📉 复盘分析模块（`analytics/`）
+
+> 把「投出去的结果」变成「下一轮更准的投递」。收集你在 BOSS / 脉脉 的投递结果（不合适 / 已读不回 / 面试 / offer），分析为什么没回音，对照岗位改简历，并用简历版本 A/B 量化「改简历到底有没有用」。
+
+**两条主线**
+- **目标 A · 前瞻（进攻）**：新岗位来了 → 五维评分（对照原简历）→ 对照 JD 改简历 → 导出 LaTeX / ATS 校验。
+- **目标 B · 复盘（防守）**：已投结果回流 → 评分 → 交叉分析 + A/B 回复率 → 沉淀下一版该怎么改。
+
+**特点**：零依赖、免 API key 即可跑通（LLM 直连 / 导出提示词贴 WorkBuddy 双通道）；原简历支持 `.doc / .docx / .pdf / .txt` 上传解析。详见 [analytics/README.md](./analytics/README.md) 与 [analytics/docs/](./analytics/docs/)。
 
 ---
 
