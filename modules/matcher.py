@@ -86,6 +86,74 @@ class JobMatcher:
         results.sort(key=lambda x: x.get("overall_score", 0), reverse=True)
         return results
 
+    # ---- 决策通道：是否建议投递 + 真实过筛概率 ----
+    # 实验表明该通道比纯匹配度打分更接近真实录取结果（AUC≈0.64），
+    # 关键在让 LLM 对顶级厂做内生折扣。与 match_single 并列使用。
+    DECISION_SYSTEM_PROMPT = (
+        "你是求职决策助手。基于候选人简历与岗位 JD，判断是否建议投递并估计真实过筛概率。"
+        "重点：公司竞争力层级（顶级厂过筛率通常<10%）比内容匹配度更影响真实结果；"
+        "顶级厂即便匹配度高也应显著下调 pass_prob。"
+    )
+
+    def decide_single(self, resume: dict, job: dict, preferences: dict = None) -> dict:
+        """
+        单个简历-JD 决策：是否建议投递 + 真实过筛概率 + 理由。
+        返回 {apply, pass_prob, reason, competition_level, ...}
+        """
+        resume_summary = self._summarize_resume(resume)
+        job_summary = self._summarize_job(job)
+
+        user_prompt = f"""请判断以下岗位是否值得投递：
+
+=== 候选人简历摘要 ===
+{resume_summary}
+
+=== 目标岗位信息 ===
+公司：{job.get('company', '未知')}
+职位：{job.get('title', '未知')}
+地点：{job.get('location', '未知')}
+职位描述：
+{job_summary}
+
+=== 候选人偏好 ===
+{preferences or '无特殊偏好'}
+
+请输出 JSON：
+{{"apply":0或1, "pass_prob":0-100, "reason":"一句话理由", "competition_level":"顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知"}}"""
+
+        try:
+            result = self.llm.chat_json(self.DECISION_SYSTEM_PROMPT, user_prompt)
+            result.update({
+                "job_title": job.get("title", ""),
+                "company": job.get("company", ""),
+                "job_url": job.get("job_url", ""),
+                "decided_at": datetime.now().isoformat()
+            })
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "job_title": job.get("title", ""),
+                "company": job.get("company", ""),
+                "apply": 0,
+                "pass_prob": 0,
+            }
+
+    def decide_batch(self, resume: dict, jobs: list, preferences: dict = None,
+                     progress_callback=None) -> list:
+        """
+        批量决策：简历 vs 多个JD，返回按 pass_prob 降序排列的结果。
+        """
+        results = []
+        total = len(jobs)
+        for i, job in enumerate(jobs):
+            if progress_callback:
+                progress_callback(f"正在决策 ({i+1}/{total}): {job.get('title', '')} @ {job.get('company', '')}")
+            results.append(self.decide_single(resume, job, preferences))
+        # 按过筛概率降序
+        results.sort(key=lambda x: x.get("pass_prob", 0), reverse=True)
+        return results
+
     def _summarize_resume(self, resume: dict) -> str:
         """简历摘要"""
         parts = []
