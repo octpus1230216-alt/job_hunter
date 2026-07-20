@@ -28,7 +28,7 @@ from pathlib import Path
 
 from modules.store import (
     DEFAULT_DB, WEIGHTS, init_db, get_all, get_by_id, get_latest_resume, get_resume,
-    get_unscored, update_fit, update_decision, infer_competition, COMPETITION_FACTOR,
+    get_unscored, update_fit, update_decision, infer_competition, get_competition_factor,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -147,7 +147,7 @@ def heuristic_score(jd_text: str, profile_text: str, company: str = "") -> dict:
                     + behavioral * WEIGHTS["fit_behavioral"] + career * WEIGHTS["fit_career"]
                     + background * WEIGHTS["fit_background"] + salary * WEIGHTS["fit_salary"]
                     + level * WEIGHTS["fit_level"])
-    realistic = round(overall * COMPETITION_FACTOR[comp])
+    realistic = round(overall * get_competition_factor(comp))
     return {"technical": technical, "experience": experience, "behavioral": behavioral,
             "career": career, "background": background, "salary": salary, "level": level,
             "location": "PASS", "competition": comp, "overall": overall, "realistic": realistic}
@@ -200,7 +200,7 @@ def score_with_llm(app_row, profile_text: str) -> dict:
                     + background * WEIGHTS["fit_background"] + salary * WEIGHTS["fit_salary"]
                     + level * WEIGHTS["fit_level"])
     competition = data.get("competition_level") or infer_competition(app_row["company"])
-    realistic = int(data.get("realistic_prob", round(overall * COMPETITION_FACTOR.get(competition, 0.6))))
+    realistic = int(data.get("realistic_prob", round(overall * get_competition_factor(competition))))
     return {"technical": technical, "experience": experience, "behavioral": behavioral,
             "career": career, "background": background, "salary": salary, "level": level,
             "location": data.get("fit_location", "PASS"), "competition": competition,
