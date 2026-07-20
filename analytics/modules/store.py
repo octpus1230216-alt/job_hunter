@@ -55,13 +55,17 @@ WEIGHTS = {
 
 # 公司竞争力档位：决定"真实通过概率"的调节因子，不直接计入 candidate fit。
 # 不同公司竞争强度不同（字节/腾讯顶级厂 vs 天使轮小厂），同一 fit 在顶级厂的真实命中率更低。
+#
+# ⚠️ 已按真实数据重标定（见 analytics/tune.py）：实测顶级厂过筛率仅 7.7%（n=26），
+# 非顶级 28%（n=75）。原 顶级厂=0.30 明显过于乐观。下列为经验校准值，
+# 建议定期跑 `python analytics/tune.py` 用 measured positive/n（收缩估计）刷新。
 COMPETITION_LEVELS = ["顶级厂", "一线大厂", "中厂/B轮/C轮", "初创/天使轮", "未知"]
 COMPETITION_FACTOR = {
-    "顶级厂": 0.30,
-    "一线大厂": 0.50,
-    "中厂/B轮/C轮": 0.70,
-    "初创/天使轮": 0.90,
-    "未知": 0.60,
+    "顶级厂": 0.16,
+    "一线大厂": 0.40,
+    "中厂/B轮/C轮": 0.55,
+    "初创/天使轮": 0.70,
+    "未知": 0.50,
 }
 # 顶级厂关键词（子集匹配，命中即归顶级厂）；未命中再按"轮次"判初创/中厂，否则归未知
 _TOP_TIER = ["字节", "抖音", "腾讯", "阿里", "百度", "美团", "快手", "deepseek", "智谱",
@@ -123,6 +127,10 @@ def init_db(db_path: Path = DEFAULT_DB) -> sqlite3.Connection:
             fit_overall   INTEGER,                    -- 加权总分 0-100
             competition_level TEXT,                   -- 公司竞争力档位（新增，不计入 fit）
             realistic_prob INTEGER,                   -- 真实通过概率估计 0-100 = fit_overall × 竞争力因子（新增）
+            llm_apply      INTEGER,                   -- 决策通道：是否建议投递 0/1
+            llm_pass_prob  INTEGER,                   -- 决策通道：LLM 估计真实过筛概率 0-100
+            llm_reason     TEXT,                      -- 决策通道：一句话理由
+            decision_at    TEXT,                      -- 决策时间戳
             job_quality   INTEGER,                    -- 岗位本身好坏 1-5（手动）
             notes         TEXT,
             archive_path  TEXT                        -- documents/applications/<company>_<role>/
@@ -142,7 +150,7 @@ def init_db(db_path: Path = DEFAULT_DB) -> sqlite3.Connection:
         """
     )
     _migrate_resume_columns(conn)  # 兼容旧库：补 source_file / source_format
-    _migrate_application_columns(conn)  # 兼容旧库：补七维扩展列 + 竞争力列
+    _migrate_application_columns(conn)  # 兼容旧库：补七维扩展列 + 竞争力列 + 决策列
     conn.commit()
     return conn
 
@@ -156,15 +164,17 @@ def _migrate_resume_columns(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_application_columns(conn: sqlite3.Connection) -> None:
-    """兼容旧库：applications 表若缺七维扩展列/竞争力列，则补列。"""
+    """兼容旧库：applications 表若缺扩展列，则补列（七维 / 竞争力 / 决策通道）。"""
     existing = {r[1] for r in conn.execute("PRAGMA table_info(applications)").fetchall()}
-    for col in ("fit_background", "fit_salary", "fit_level",
-                "competition_level", "realistic_prob"):
+    col_types = {
+        "fit_background": "INTEGER", "fit_salary": "INTEGER", "fit_level": "INTEGER",
+        "competition_level": "TEXT", "realistic_prob": "INTEGER",
+        "llm_apply": "INTEGER", "llm_pass_prob": "INTEGER",
+        "llm_reason": "TEXT", "decision_at": "TEXT",
+    }
+    for col, ctype in col_types.items():
         if col not in existing:
-            if col == "competition_level":
-                conn.execute(f"ALTER TABLE applications ADD COLUMN {col} TEXT")
-            else:
-                conn.execute(f"ALTER TABLE applications ADD COLUMN {col} INTEGER")
+            conn.execute(f"ALTER TABLE applications ADD COLUMN {col} {ctype}")
 
 
 def _archive_slug(company: str, role: str) -> str:
@@ -219,6 +229,26 @@ def update_fit(conn: sqlite3.Connection, app_id: int, *,
         "fit_salary": salary, "fit_level": level,
         "competition_level": competition, "fit_overall": overall,
         "realistic_prob": realistic,
+    }
+    for col, val in mapping.items():
+        if val is not None:
+            sets.append(f"{col} = ?")
+            vals.append(val)
+    if not sets:
+        return
+    vals.append(app_id)
+    conn.execute(f"UPDATE applications SET {', '.join(sets)} WHERE id = ?", vals)
+    conn.commit()
+
+
+def update_decision(conn: sqlite3.Connection, app_id: int, *,
+                    apply=None, pass_prob=None, reason=None, decision_at=None,
+                    competition=None) -> None:
+    """回写决策通道结果（score.py --mode decide / matcher.decide_single 调用）。"""
+    sets, vals = [], []
+    mapping = {
+        "llm_apply": apply, "llm_pass_prob": pass_prob, "llm_reason": reason,
+        "decision_at": decision_at, "competition_level": competition,
     }
     for col, val in mapping.items():
         if val is not None:
@@ -317,6 +347,20 @@ def competition_breakdown(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         ORDER BY n DESC
         """
     ).fetchall()
+
+
+def suggest_competition_factor(conn: sqlite3.Connection, alpha: int = 2, beta: int = 3) -> dict:
+    """用各档位 measured positive/n + Beta 伪计数收缩，建议 COMPETITION_FACTOR。
+
+    alpha/beta 为先验伪计数（默认 2/3），防小样本过拟合。返回 {tier: factor}。
+    用法见 analytics/tune.py。
+    """
+    out = {}
+    for r in competition_breakdown(conn):
+        n = r["n"]
+        if n:
+            out[r["competition_level"]] = round((r["positive"] + alpha) / (n + alpha + beta), 3)
+    return out
 
 
 def resume_ab(conn: sqlite3.Connection, exclude_prospect: bool = True) -> list[sqlite3.Row]:

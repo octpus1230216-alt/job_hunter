@@ -3,12 +3,18 @@
 七维：技能 / 经验 / 文化 / 职业 / 背景契合 / 薪资匹配 / 层级匹配，各 0-100，
 加权(技0.24/经0.20/文0.12/职0.24/背0.12/薪0.04/级0.04)出 fit_overall；地点(PASS/FAIL/FLAG)不参与加权。
 额外：competition_level（公司竞争力档位，不计入 fit）+ realistic_prob（= fit_overall × 竞争力因子，真实命中率估计）。
-双通道：
-  python score.py --all                     # 离线 heuristic 评分（零依赖，可跑）
-  python score.py --id 3 --mode llm         # LLM 直连（需 OPENAI_API_KEY，可选依赖 openai）
-  python score.py --id 3 --export-prompt    # 打印「贴给 WorkBuddy」的评分提示词（免 key）
 
-写入 store.update_fit()。job_quality(岗位本身好坏) 为手动字段，本模块不评。
+三通道（实验见 analytics/README / LLM对比报告）：
+  python score.py --all                      # 离线 heuristic 评分（零依赖，可跑）
+  python score.py --id 3 --mode llm          # LLM 直连七维打分（需 OPENAI_API_KEY + openai）
+  python score.py --id 3 --mode decide       # LLM 决策通道：是否建议投递 + 真实过筛概率 + 理由（最佳通道, AUC≈0.64）
+  python score.py --id 3 --export-prompt     # 打印「贴给 WorkBuddy」的七维评分提示词（免 key）
+  python score.py --id 3 --export-decision-prompt  # 打印「贴给 WorkBuddy」的决策提示词（免 key）
+
+写入 store.update_fit() / store.update_decision()。job_quality(岗位本身好坏) 为手动字段，本模块不评。
+
+设计要点：fit_overall 仅作可解释诊断特征，不可直接当命中率（实验 AUC≈0.49）；
+真实预测应交给 realistic_prob（竞争力因子）或决策通道。
 """
 
 from __future__ import annotations
@@ -17,11 +23,12 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from modules.store import (
     DEFAULT_DB, WEIGHTS, init_db, get_all, get_by_id, get_latest_resume, get_resume,
-    get_unscored, update_fit, infer_competition, COMPETITION_FACTOR,
+    get_unscored, update_fit, update_decision, infer_competition, COMPETITION_FACTOR,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -38,6 +45,20 @@ RUBRIC = """七维匹配度评分（各 0-100）：
 地点（Location）：单独 PASS / FAIL / FLAG，不参与加权。
 公司竞争力（competition_level）：顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知——同一 fit 在顶级厂真实命中率更低，由 realistic_prob = fit_overall × 竞争力因子 体现。
 总评 = 四舍五入(技能*0.24 + 经验*0.20 + 文化*0.12 + 职业*0.24 + 背景*0.12 + 薪资*0.04 + 层级*0.04)。"""
+
+# 决策通道评分量规：让 LLM 直接判断"是否建议投递 + 真实过筛概率 + 理由"。
+# 关键：明确要求 LLM 对顶级厂做内生折扣——实验证明这正是决策通道 AUC(0.64) 高于
+# 七维打分(0.57) 与离线基线(0.61) 的来源。
+DECISION_RUBRIC = """你是求职决策助手。基于候选人档案与岗位 JD，判断是否值得投递，并估计真实过筛概率。
+
+判断原则：
+- 七维内容匹配度只是参考；决定真实过筛率的更关键因素是公司竞争力（顶级厂过筛率通常<10%）。
+- 顶级厂（字节/腾讯/阿里/百度/美团/快手/DeepSeek/智谱/小红书/拼多多等）即便内容高度匹配，也应显著下调 pass_prob 并谨慎建议(apply=0)。
+- 中厂/初创/天使轮过筛率更高，匹配度中上即可积极建议(apply=1)。
+- apply=1 表示建议投递，0 表示不建议（与其浪费时间不如聚焦高概率岗位）。
+
+只输出 JSON：
+{"apply":0或1, "pass_prob":0-100, "reason":"一句话理由(含关键依据, 如公司层级/匹配点/风险)", "competition_level":"顶级厂/一线大厂/中厂B轮C轮/初创天使轮/未知"}"""
 
 
 def _tokens(text: str) -> set:
@@ -79,7 +100,7 @@ def _parse_years(text: str):
 def heuristic_score(jd_text: str, profile_text: str, company: str = "") -> dict:
     """离线启发式评分（七维 + 竞争力 + 真实概率）。
 
-    说明：无 LLM 时的基线，仅让管道可跑；真实评分请用 --mode llm 或 --export-prompt。
+    说明：无 LLM 时的基线，仅让管道可跑；真实评分请用 --mode llm / --mode decide。
     文化/背景无法从文本可靠推断，给中性默认分；薪资/层级用简单规则解析。
     """
     comp = infer_competition(company)
@@ -147,6 +168,14 @@ def build_llm_prompt(company: str, role: str, jd_text: str, profile_text: str) -
     )
 
 
+def build_decision_prompt(company: str, role: str, jd_text: str, profile_text: str) -> str:
+    return (
+        f"请基于候选人档案与市场情况，判断该岗位是否值得投递并估计真实过筛概率。\n\n"
+        f"岗位：{company} — {role}\n\nJD：\n{jd_text}\n\n候选人档案：\n{profile_text}\n\n"
+        f"{DECISION_RUBRIC}\n"
+    )
+
+
 def score_with_llm(app_row, profile_text: str) -> dict:
     """直连 LLM（OpenAI 兼容）。需环境变量 OPENAI_API_KEY，且 pip install openai。"""
     try:
@@ -178,6 +207,32 @@ def score_with_llm(app_row, profile_text: str) -> dict:
             "overall": overall, "realistic": realistic}
 
 
+def decide_with_llm(app_row, profile_text: str) -> dict:
+    """决策通道：让 LLM 直接判断是否建议投递 + 真实过筛概率 + 理由。
+
+    实验显示此通道 AUC≈0.64，高于七维打分(0.57) 与离线基线(0.61)；
+    增量来自 LLM 对顶级厂竞争的内生折扣。需 OPENAI_API_KEY + openai。
+    """
+    try:
+        from openai import OpenAI  # type: ignore
+    except ImportError:
+        raise SystemExit("未安装 openai，请先: pip install openai （或改用 --mode heuristic）")
+    import os
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    prompt = build_decision_prompt(app_row["company"], app_row["role"], app_row["jd_text"] or "", profile_text)
+    resp = client.chat.completions.create(
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+    )
+    data = json.loads(resp.choices[0].message.content)
+    apply = int(data.get("apply", 0))
+    pass_prob = int(data.get("pass_prob", 0))
+    reason = str(data.get("reason", ""))
+    competition = data.get("competition_level") or infer_competition(app_row["company"])
+    return {"apply": apply, "pass_prob": pass_prob, "reason": reason, "competition": competition}
+
+
 def _profile_text(conn, profile_file: str) -> str:
     if profile_file:
         p = Path(profile_file)
@@ -203,17 +258,20 @@ def score_one(conn, app_row, mode: str, profile_file: str = "") -> dict:
     profile_text = _profile_for_app(conn, app_row, profile_file)
     if mode == "llm":
         return score_with_llm(app_row, profile_text)
+    if mode == "decide":
+        return decide_with_llm(app_row, profile_text)
     if mode == "heuristic":
         return heuristic_score(app_row["jd_text"] or "", profile_text, app_row.get("company", ""))
     raise ValueError(mode)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="score.py — 七维匹配度评分（+公司竞争力/真实概率）")
+    ap = argparse.ArgumentParser(description="score.py — 七维匹配度评分 + 决策通道（+公司竞争力/真实概率）")
     ap.add_argument("--id", type=int, help="指定投递 id")
     ap.add_argument("--all", action="store_true", help="对所有有 JD 的记录评分")
-    ap.add_argument("--mode", choices=["heuristic", "llm"], default="heuristic")
-    ap.add_argument("--export-prompt", action="store_true", help="打印贴给 WorkBuddy 的评分提示词（免 key）")
+    ap.add_argument("--mode", choices=["heuristic", "llm", "decide"], default="heuristic")
+    ap.add_argument("--export-prompt", action="store_true", help="打印贴给 WorkBuddy 的七维评分提示词（免 key）")
+    ap.add_argument("--export-decision-prompt", action="store_true", help="打印贴给 WorkBuddy 的决策提示词（免 key）")
     ap.add_argument("--profile", default="", help="候选人档案文件（默认取最新简历）")
     args = ap.parse_args()
 
@@ -243,6 +301,21 @@ def main() -> None:
             print(f"--- id={row['id']} {row['company']} — {row['role']} ---")
             print(build_llm_prompt(row["company"], row["role"], row["jd_text"] or "", profile_text))
             print()
+            continue
+        if args.export_decision_prompt:
+            print(f"--- id={row['id']} {row['company']} — {row['role']} ---")
+            print(build_decision_prompt(row["company"], row["role"], row["jd_text"] or "", profile_text))
+            print()
+            continue
+        if args.mode == "decide":
+            dec = decide_with_llm(row, profile_text)
+            update_decision(conn, row["id"],
+                            apply=dec["apply"], pass_prob=dec["pass_prob"],
+                            reason=dec.get("reason", ""), decision_at=datetime.now().isoformat(),
+                            competition=dec.get("competition"))
+            print(f"🤖 id={row['id']} {row['company']} — {row['role']}: "
+                  f"建议投递={dec['apply']} 过筛概率={dec['pass_prob']} "
+                  f"竞争[{dec.get('competition')}] 理由={dec.get('reason', '')}")
             continue
         res = score_one(conn, row, args.mode, args.profile)
         update_fit(conn, row["id"], **res)
