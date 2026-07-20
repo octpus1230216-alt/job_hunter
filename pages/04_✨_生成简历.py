@@ -6,7 +6,46 @@ import streamlit as st
 from pathlib import Path
 from datetime import datetime
 
+from modules.auth import require_auth
+require_auth()
+
 st.title("✨ 生成定制简历")
+
+
+def _record_to_tracker(job: dict, resume_path: str = ""):
+    """生成成功后把岗位写入投递追踪（JSON + 自动回灌 SQLite），避免「生成」与「追踪」脱钩。
+
+    已存在同 key 记录则只补简历路径，不重复添加。
+    """
+    try:
+        from modules.tracker import ApplicationTracker
+    except Exception:
+        return
+    try:
+        tracker = ApplicationTracker()
+        key = f"{job.get('company','')}|{job.get('title','')}|{job.get('job_url','')}"
+        existing = [a for a in tracker.load()
+                    if f"{a.get('company','')}|{a.get('title','')}|{a.get('job_url','')}" == key]
+        if existing:
+            if resume_path and not existing[0].get("resume_file"):
+                tracker.update_file_paths(existing[0]["id"], resume_path, "")
+            return
+        pass_prob = job.get("llm_pass_prob")
+        match_score = pass_prob if isinstance(pass_prob, int) else job.get("_match", {}).get("overall_score", 0)
+        tracker.add(
+            job.get("company", ""), job.get("title", ""),
+            job_url=job.get("job_url", ""),
+            source=job.get("source_platform", job.get("source", "")),
+            match_score=match_score,
+            status="applied",
+            competition_level=job.get("competition_level") or (job.get("_match", {}) or {}).get("competition", ""),
+            llm_apply=1 if pass_prob is not None else None,
+            llm_pass_prob=pass_prob,
+            llm_reason=job.get("llm_reason", ""),
+        )
+    except Exception:
+        pass
+
 
 if not st.session_state.get("resume_parsed"):
     st.error("请先在配置页面上传并解析简历")
@@ -74,6 +113,7 @@ if st.button("🚀 一键生成全部", use_container_width=True, type="primary"
                     bilingual=bilingual
                 )
                 st.session_state[f"gen_{i}"] = result
+                _record_to_tracker(job)
             except Exception as e:
                 st.error(f"{job.get('company')} 生成失败: {str(e)[:100]}")
 
@@ -127,6 +167,7 @@ for i, job in enumerate(selected_jobs):
                                 bilingual=bilingual
                             )
                             st.session_state[f"gen_{i}"] = result
+                            _record_to_tracker(job)
                             status.update(label="生成完成！", state="complete")
                             st.rerun()
 
