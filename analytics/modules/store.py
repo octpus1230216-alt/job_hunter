@@ -67,6 +67,40 @@ COMPETITION_FACTOR = {
     "初创/天使轮": 0.70,
     "未知": 0.50,
 }
+# 运行时可覆盖（由校准页「一键写回」），覆盖文件位于 data/competition_overrides.json。
+# 这样校准不必改源码，且在多次部署间可持久化。
+COMPETITION_OVERRIDE_PATH = DEFAULT_DB.parent / "competition_overrides.json"
+
+
+def load_competition_overrides() -> dict:
+    """读取 data/competition_overrides.json 中的因子覆盖（校准页写回）。"""
+    import json as _json
+    try:
+        if COMPETITION_OVERRIDE_PATH.exists():
+            with open(COMPETITION_OVERRIDE_PATH, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            return {k: float(v) for k, v in data.items() if k in COMPETITION_FACTOR}
+    except Exception:
+        pass
+    return {}
+
+
+def save_competition_overrides(overrides: dict) -> None:
+    """写回因子覆盖到 data/competition_overrides.json（校准页「一键写回」）。"""
+    import json as _json
+    COMPETITION_OVERRIDE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(COMPETITION_OVERRIDE_PATH, "w", encoding="utf-8") as f:
+        _json.dump(
+            {k: float(v) for k, v in overrides.items() if k in COMPETITION_FACTOR},
+            f, ensure_ascii=False, indent=2,
+        )
+
+
+def get_competition_factor(level: str) -> float:
+    """取某档位的有效竞争力因子（优先覆盖值，否则默认 COMPETITION_FACTOR）。"""
+    return load_competition_overrides().get(level, COMPETITION_FACTOR.get(level, 0.5))
+
+
 # 顶级厂关键词（子集匹配，命中即归顶级厂）；未命中再按"轮次"判初创/中厂，否则归未知
 _TOP_TIER = ["字节", "抖音", "腾讯", "阿里", "百度", "美团", "快手", "deepseek", "智谱",
             "昆仑万维", "蚂蚁", "京东", "拼多多", "网易", "华为", "小米", "滴滴", "联想",

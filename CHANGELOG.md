@@ -4,6 +4,28 @@
 
 ---
 
+## v1.6.0 — 2026-07-20
+
+### 新增 — 决策通道接入网页 + 校准页（来自调参实验结论）
+- **审核页修复（Phase 0）**：原审核页读取 `jobs_found` / `manual_jobs`（已无人写入）导致永远空白；
+  改为读取发现页写入的 `st.session_state.all_jobs`，打通「发现 → 审核 → 生成」全链路。
+- **删除死代码**：移除发现页未调用的 `_filter_jobs`。
+- **决策通道接入审核页（Phase 1a）**：新增「🤖 运行 AI 决策排序」按钮，调用
+  `modules/matcher.decide_single` 对每个岗位判断是否建议投递 + 真实过筛概率 + 理由；
+  默认按过筛概率排序（实验显示该通道比纯匹配度更贴近真实录取，AUC≈0.64）。
+- **竞争力因子可视化（Phase 1b）**：审核卡片展示公司竞争力档位（顶级厂折扣内置在决策中）。
+- **新增校准页 `pages/07_🎯_校准.py`（Phase 1c）**：可视化 `analytics/tune.py` 逻辑——
+  用实测 positive/n + Beta 收缩给出 `COMPETITION_FACTOR` 建议值，支持「一键写回」（写入
+  `data/competition_overrides.json`，运行时优先于 store.py 默认值），并诊断七维 fit_overall 预测力。
+- **store.py 运行时因子覆盖**：新增 `get_competition_factor` / `load_competition_overrides` /
+  `save_competition_overrides`，校准无需改源码；`score.py` 已改用 `get_competition_factor`。
+
+### 已知缺口（后续 Phase）
+- 网页「📈 投递追踪」用 JSON 存储（modules.tracker），与 analytics 的 SQLite(applications) 尚未打通，
+  校准页暂读 SQLite 侧数据；打通二者为 Phase 2 目标。
+
+---
+
 ## v1.5.0 — 2026-06-09
 
 ### 精简 — 三终端 → 二终端架构

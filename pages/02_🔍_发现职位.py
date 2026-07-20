@@ -90,23 +90,8 @@ def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list
     return results
 
 
-def _filter_jobs(all_jobs: list, industry_filter: str, channel_filter: str, sort_by: str) -> list:
-    """筛选和排序"""
-    result = list(all_jobs)
-    if industry_filter != "全部":
-        tag_map = {"🔵 核心行业": "核心行业", "🟢 可迁移": "可迁移", "🟡 探索": "探索"}
-        target_tag = tag_map.get(industry_filter, industry_filter)
-        result = [j for j in result if j.get("_industry_tag", "") == target_tag]
-    if channel_filter != "全部":
-        if channel_filter == "海外平台":
-            result = [j for j in result if j.get("source_platform") not in ("manual", None, "")]
-        elif channel_filter == "手动粘贴":
-            result = [j for j in result if j.get("source_platform") == "manual"]
-    if sort_by == "按匹配度":
-        result.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
-    else:
-        result.reverse()
-    return result
+# 注：筛选/排序逻辑已移到「📊 审核挑选」页面（支持 AI 决策通道排序），
+# 发现页只负责采集岗位并暂存到 st.session_state.all_jobs。
 
 
 # ============================================================

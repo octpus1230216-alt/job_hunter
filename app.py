@@ -96,8 +96,8 @@ with st.sidebar:
     else:
         st.warning("⚠️ 请先配置 API")
 
-    if st.session_state.get("jobs_found"):
-        count = len(st.session_state.jobs_found)
+    if st.session_state.get("all_jobs"):
+        count = len(st.session_state.all_jobs)
         st.info(f"📌 {count} 个待审核岗位")
     else:
         st.info("📌 暂无待审核岗位")
