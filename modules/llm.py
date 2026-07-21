@@ -53,6 +53,17 @@ class LLMClient:
             self._model = cfg.get("model", "qwen2.5:14b")
             self._base_url = cfg.get("base_url", "http://localhost:11434")
 
+        elif self.provider == "custom":
+            # 任何兼容 OpenAI /v1/chat/completions 的端点（通义千问/智谱/GLM/Kimi/Claude 代理等）
+            from openai import OpenAI
+            cfg = self.llm_config.get("custom", {})
+            api_key = cfg.get("api_key", "") or os.environ.get("CUSTOM_API_KEY", "")
+            self._client = OpenAI(
+                api_key=api_key,
+                base_url=cfg.get("base_url", "https://api.openai.com/v1")
+            )
+            self._model = cfg.get("model", "gpt-4o")
+
         else:
             raise ValueError(f"不支持的 LLM provider: {self.provider}")
 
@@ -65,7 +76,7 @@ class LLMClient:
         """
         client = self._get_client()
 
-        if self.provider in ("deepseek", "openai"):
+        if self.provider in ("deepseek", "openai", "custom"):
             response = client.chat.completions.create(
                 model=self._model,
                 messages=[
@@ -111,7 +122,7 @@ class LLMClient:
 
     def switch_provider(self, provider: str):
         """切换 LLM 提供商"""
-        if provider not in ("deepseek", "openai", "ollama"):
+        if provider not in ("deepseek", "openai", "ollama", "custom"):
             raise ValueError(f"不支持的 provider: {provider}")
         self.provider = provider
         self._client = None  # 重置客户端
@@ -130,6 +141,10 @@ class LLMClient:
             available.append("openai")
         # Ollama - 总是显示为可配置
         available.append("ollama")
+        # Custom (OpenAI 兼容)
+        cfg = self.llm_config.get("custom", {})
+        if cfg.get("api_key") or os.environ.get("CUSTOM_API_KEY"):
+            available.append("custom")
         return available
 
 

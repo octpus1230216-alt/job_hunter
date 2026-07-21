@@ -30,20 +30,32 @@ with tab1:
     st.subheader("上传主简历")
     st.caption("上传你的主简历（PDF/DOCX/TXT），AI会自动解析并用于后续匹配和定制")
 
+    # 固定个人信息文件夹：简历与解析结果持久化到 data/profile/，刷新后自动加载（缺失也不影响网站启动）
+    profile_dir = Path(__file__).parent.parent / "data" / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    _parsed_cache = profile_dir / "resume_parsed.json"
+    if not st.session_state.get("resume_parsed") and _parsed_cache.exists():
+        try:
+            import json
+            st.session_state.resume_parsed = json.loads(_parsed_cache.read_text(encoding="utf-8"))
+            _rf = list(profile_dir.glob("resume.*"))
+            st.session_state.resume_path = str(_rf[0]) if _rf else ""
+            st.info("已自动加载本地简历（data/profile/），如需更换可重新上传")
+        except Exception:
+            pass
+
     uploaded_file = st.file_uploader(
         "支持 PDF / DOCX / TXT 格式",
         type=["pdf", "docx", "txt"],
     )
 
     if uploaded_file:
-        resume_dir = Path(__file__).parent.parent / "resume"
-        resume_dir.mkdir(exist_ok=True)
-        resume_path = resume_dir / uploaded_file.name
+        resume_path = profile_dir / uploaded_file.name
 
         with open(resume_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        st.success(f"文件已保存: {resume_path.name}")
+        st.success(f"文件已保存: {resume_path.name}（位于 data/profile/，下次自动加载）")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -80,11 +92,7 @@ with tab1:
                     result = parser.parse(str(resume_path), llm)
                     st.session_state.resume_parsed = result
                     st.session_state.resume_path = str(resume_path)
-                    # 自动保存到本地，下次打开自动加载
-                    import json
-                    resume_cache = Path(__file__).parent.parent / "data" / "resume_parsed.json"
-                    with open(resume_cache, "w", encoding="utf-8") as f:
-                        json.dump(result, f, ensure_ascii=False, indent=2)
+                    # 解析结果已自动缓存到 data/profile/resume_parsed.json（由 ResumeParser 写入），下次打开自动加载
                     status.update(label="解析完成！", state="complete")
                     st.success("简历解析成功！")
                     st.rerun()
@@ -135,8 +143,8 @@ with tab2:
 
     provider = st.selectbox(
         "选择 AI 提供商",
-        ["deepseek", "openai", "ollama"],
-        format_func=lambda x: {"deepseek": "DeepSeek（推荐）", "openai": "OpenAI", "ollama": "Ollama（本地免费）"}[x],
+        ["deepseek", "openai", "ollama", "custom"],
+        format_func=lambda x: {"deepseek": "DeepSeek（推荐）", "openai": "OpenAI", "ollama": "Ollama（本地免费）", "custom": "自定义（OpenAI 兼容）"}[x],
     )
 
     if provider == "deepseek":
@@ -195,7 +203,7 @@ with tab2:
                 except Exception as e:
                     st.warning(f"配置已保存，但测试连接失败: {str(e)[:150]}")
 
-    else:
+    elif provider == "ollama":
         model = st.text_input("Ollama 模型", value="qwen2.5:14b")
         base_url = st.text_input("Ollama 服务地址", value="http://localhost:11434")
         st.info("确保已安装 Ollama: https://ollama.com")
@@ -215,6 +223,34 @@ with tab2:
                 st.success(f"✅ 连接成功: {resp[:80]}")
             except Exception as e:
                 st.warning(f"配置已保存，但测试连接失败: {str(e)[:150]}")
+
+    elif provider == "custom":
+        st.caption("任何兼容 OpenAI /v1/chat/completions 的端点：通义千问、智谱 GLM、Kimi、Claude 代理等")
+        api_key = st.text_input(
+            "API Key",
+            type="password",
+            value=config.get("llm", {}).get("custom", {}).get("api_key", ""),
+        )
+        base_url = st.text_input("接口地址 (OpenAI 兼容)", value=config.get("llm", {}).get("custom", {}).get("base_url", "https://api.openai.com/v1"))
+        model = st.text_input("模型名称", value=config.get("llm", {}).get("custom", {}).get("model", "gpt-4o"))
+
+        if st.button("💾 保存并测试自定义", use_container_width=True):
+            if not api_key:
+                st.error("请输入 API Key")
+            else:
+                config.setdefault("llm", {})
+                config["llm"]["provider"] = "custom"
+                config["llm"]["custom"] = {"api_key": api_key, "model": model, "base_url": base_url}
+                save_config(config)
+                st.cache_resource.clear()
+                try:
+                    from modules.llm import LLMClient
+                    llm = LLMClient()
+                    st.session_state.llm_client = llm
+                    resp = llm.chat("你是一个助手。", "回复'连接成功'")
+                    st.success(f"✅ 连接成功: {resp[:80]}")
+                except Exception as e:
+                    st.warning(f"配置已保存，但测试连接失败: {str(e)[:150]}")
 
 # ============================================================
 # Tab 3: 求职偏好
