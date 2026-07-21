@@ -5,6 +5,9 @@
 import streamlit as st
 from pathlib import Path
 
+from modules.auth import require_auth
+require_auth()
+
 st.title("📖 使用说明")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([

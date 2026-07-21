@@ -79,12 +79,15 @@ class AISearcher:
             }, timeout=15)
 
             if resp.status_code != 200:
-                return []
+                raise RuntimeError(
+                    f"DuckDuckGo 即时接口返回 HTTP {resp.status_code}（接口可能不可用）")
 
             data = resp.json()
             topics = data.get("RelatedTopics", [])
             if not topics:
-                return []
+                raise RuntimeError(
+                    "DuckDuckGo 即时接口未返回任何结果（该免费接口已不稳定/已下线）。"
+                    "建议改用「国内平台直达搜索」或「手动粘贴 JD」，或配置其他搜索后端。")
 
             # 构造搜索摘要给 LLM 解析
             snippets = []

@@ -231,6 +231,33 @@ def add_application(conn: sqlite3.Connection, **fields) -> int:
     return cur.lastrowid
 
 
+def upsert_application_by_key(conn: sqlite3.Connection, company: str, role: str,
+                             source_url: str = "", **fields) -> int:
+    """按 (company, role, source_url) 幂等 upsert 一条投递记录。
+
+    供 modules/tracker（UI 用的 JSON 存储）在每次变更时回灌 SQLite，打通「双存储孤岛」，
+    使真实投递结果能流入校准（tune.py / 校准页）。已存在则更新给定字段，否则插入。
+    """
+    row = conn.execute(
+        "SELECT id FROM applications WHERE company=? AND role=? AND COALESCE(source_url,'')=?",
+        (company, role, source_url or ""),
+    ).fetchone()
+    if row:
+        sets, vals = [], []
+        for col, val in fields.items():
+            if val is not None:
+                sets.append(f"{col} = ?")
+                vals.append(val)
+        if sets:
+            vals.append(row["id"])
+            conn.execute(f"UPDATE applications SET {', '.join(sets)} WHERE id = ?", vals)
+        conn.commit()
+        return row["id"]
+    base = {"company": company, "role": role, "source_url": source_url or ""}
+    base.update(fields)
+    return add_application(conn, **base)
+
+
 def get_all(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM applications ORDER BY id").fetchall()
 

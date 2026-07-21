@@ -16,6 +16,9 @@ def save_config(config: dict):
     st.session_state.config = config
 
 
+from modules.auth import require_auth
+require_auth()
+
 st.title("⚙️ 配置")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📄 简历", "🤖 API 设置", "🎯 求职偏好", "🌐 语言设置"])

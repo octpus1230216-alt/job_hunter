@@ -12,6 +12,9 @@ Phase 0 + Phase 1：
 import streamlit as st
 import pandas as pd
 
+from modules.auth import require_auth
+require_auth()
+
 st.title("📊 审核挑选")
 
 # ============================================================

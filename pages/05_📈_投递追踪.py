@@ -7,10 +7,24 @@ import pandas as pd
 from pathlib import Path
 from modules.tracker import ApplicationTracker
 
+from modules.auth import require_auth
+require_auth()
+
 st.title("📈 投递追踪")
 
 tracker = ApplicationTracker()
 applications = tracker.load()
+
+st.info(
+    "💡 在此更新投递状态会**自动回灌到校准库（SQLite）**，"
+    "「🎯 校准」页即可用真实结果校准竞争力因子、诊断匹配度预测力。"
+)
+if st.button("🔄 回灌校准库（JSON→SQLite 全量同步）", help="把当前 JSON 追踪记录幂等同步到 analytics SQLite"):
+    try:
+        n = tracker.sync_all()
+        st.success(f"已同步 {n} 条到校准库，可前往「🎯 校准」页查看效果")
+    except Exception as e:
+        st.error(f"同步失败: {str(e)[:120]}")
 
 # ============================================================
 # 统计概览

@@ -4,6 +4,25 @@
 
 ---
 
+## v1.7.0 — 2026-07-20
+
+### 新增 — 数据闭环 + 产品化（来自调参实验后续方案）
+- **打通双存储孤岛（Phase 2）**：`modules/tracker`（UI 用 JSON）每次增改/状态更新自动回灌
+  `analytics` 的 SQLite(applications)，新增幂等 `store.upsert_application_by_key`；追踪页「✨ 生成简历」
+  生成后写入追踪，「📈 投递追踪」状态更新与「🔄 回灌校准库」按钮一起把真实结果流入校准页。
+- **生成↔追踪打通**：生成定制简历时自动把岗位登记进投递追踪（含决策过筛概率），不再生成与追踪脱钩。
+- **AI 推荐公司接入 UI（Phase 4）**：发现页新增「🏢 AI 推荐更多公司」面板，调用
+  `modules/discovery/company_finder.expand_with_llm`（纯 LLM、无需联网），可勾选后注入 AI 搜索词。
+- **AI 全网搜索健壮性**：`modules/ai_searcher` 不再静默吞错，接口失败/无返回时抛出明确错误，
+  UI 给出可读提示（DuckDuckGo 即时接口已不稳定，建议改用国内平台/手动粘贴）。
+- **可选访问鉴权（Phase 4）**：新增 `modules/auth.require_auth()`，设置环境变量 `JOBHUNTER_PASSWORD`
+  （或 Streamlit secrets 的 `password`）后全页面需密码访问；未设置则保持开放。
+
+### 文档
+- 刷新 `analytics/README.md`（决策通道 / 校准页 / 数据闭环）；根 `README.md` 补充校准与决策说明。
+
+---
+
 ## v1.6.0 — 2026-07-20
 
 ### 新增 — 决策通道接入网页 + 校准页（来自调参实验结论）
@@ -21,8 +40,8 @@
   `save_competition_overrides`，校准无需改源码；`score.py` 已改用 `get_competition_factor`。
 
 ### 已知缺口（后续 Phase）
-- 网页「📈 投递追踪」用 JSON 存储（modules.tracker），与 analytics 的 SQLite(applications) 尚未打通，
-  校准页暂读 SQLite 侧数据；打通二者为 Phase 2 目标。
+- ✅ 已在 v1.7.0 打通：网页「📈 投递追踪」（JSON）与 analytics SQLite 通过 `tracker._sync_sqlite`
+  实时回灌，校准页可直接基于真实投递结果校准。
 
 ---
 

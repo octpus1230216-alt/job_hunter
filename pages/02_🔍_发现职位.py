@@ -97,6 +97,9 @@ def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list
 # ============================================================
 # 页面主逻辑
 # ============================================================
+from modules.auth import require_auth
+require_auth()
+
 st.title("🔍 发现职位")
 
 if not st.session_state.get("resume_parsed"):
@@ -200,6 +203,9 @@ if "career_report" not in st.session_state:
 
 if "all_jobs" not in st.session_state:
     st.session_state.all_jobs = []
+
+if "company_search_seed" not in st.session_state:
+    st.session_state.company_search_seed = []
 
 # ============================================================
 # Step 1: AI 职业定位
@@ -555,10 +561,12 @@ with tab3:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**中文关键词**")
+        zh_seed = st.session_state.get("company_search_seed", [])
+        zh_default = (search_kw.get("zh", [])[:8] + zh_seed)
         zh_kw = st.text_area(
             "zh_kw",
             label_visibility="collapsed",
-            value="\n".join(search_kw.get("zh", [])[:8]) if search_kw.get("zh") else "",
+            value="\n".join(zh_default) if zh_default else "",
             height=120,
             placeholder="每行一个关键词，如：ESG 分析师、碳市场 研究员",
         )
@@ -685,6 +693,48 @@ with tab4:
                 except Exception as e:
                     status.update(label="解析失败", state="error")
                     st.error(f"解析失败: {str(e)[:200]}")
+
+# ============================================================
+# 🏢 AI 推荐公司（company_finder Layer 2：纯 LLM，无需联网）
+# ============================================================
+st.markdown("---")
+with st.expander("🏢 AI 推荐更多公司（拓展投递方向）", expanded=False):
+    st.caption("基于你的定位报告 + 已发现公司，让 AI 推荐同行业 / 上下游 / 高增长公司，勾选后用于 AI 搜索。")
+    if st.button("🤖 让 AI 推荐公司", key="btn_cf", use_container_width=True):
+        with st.status("AI 正在推荐公司...", expanded=True) as status:
+            try:
+                from modules.discovery.company_finder import CompanyFinder
+                finder = CompanyFinder(st.session_state.get("config", {}), st.session_state.llm_client)
+                existing = sorted({j.get("company", "") for j in st.session_state.all_jobs if j.get("company")})
+                recs = finder.expand_with_llm(
+                    existing, ["人工智能", "互联网", " climate", "政策研究"], ["北京", "远程", "上海"])
+                if recs:
+                    names = [c.get("name", "") for c in recs if c.get("name")]
+                    st.session_state.company_recs = names
+                    status.update(label=f"推荐了 {len(names)} 家公司", state="complete")
+                    st.success(f"推荐了 {len(names)} 家公司，可在下方勾选后用于 AI 搜索")
+                else:
+                    status.update(label="未获得推荐", state="complete")
+                    st.warning("AI 未返回公司推荐，可稍后重试")
+            except Exception as e:
+                status.update(label="推荐失败", state="error")
+                st.error(f"推荐失败: {str(e)[:200]}")
+
+    recs = st.session_state.get("company_recs", [])
+    if recs:
+        picked = st.multiselect("勾选要搜索的公司", recs, default=recs[:5])
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("➕ 加入 AI 搜索词", key="cf_add"):
+                cur = st.session_state.get("company_search_seed", [])
+                merged = list(dict.fromkeys(cur + picked))
+                st.session_state.company_search_seed = merged
+                st.success(f"已添加 {len(picked)} 家到 AI 搜索词（见上方「🤖 AI 全网搜索」）")
+                st.rerun()
+        with c2:
+            if st.button("🗑️ 清空已加搜索词", key="cf_clear"):
+                st.session_state.company_search_seed = []
+                st.rerun()
 
 # ============================================================
 # Step 3: 去审核挑选（仅跳转提示，实际审核在独立页面）
