@@ -1,5 +1,7 @@
 # 🎯 job-hunter · 半自动找工作工具
 
+[![smoke-test](https://github.com/octpus1230216-alt/job_hunter/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/octpus1230216-alt/job_hunter/actions/workflows/smoke-test.yml)
+
 > **Semi-automatic job-hunting toolkit** — discover roles across domestic (Boss直聘/猎聘) and overseas (LinkedIn/Indeed/Glassdoor) platforms, let AI match your résumé to each JD, and generate tailored bilingual résumés — all your data stays **100% local**.
 >
 > 一个**半自动**的求职辅助工具：帮你完成求职流程中最耗时的部分（发现职位、智能匹配、定制简历），但**最终是否投递由你决定**，工具不会自动代投。
@@ -62,13 +64,14 @@ job-hunter/
 ├── config.example.yaml        # 配置模板（复制为 config.yaml 后填写）
 ├── requirements.txt
 ├── .gitignore                 # 已忽略 config.yaml / data/ / resume / output / .backups
-├── pages/                     # 6 个 Streamlit 页面
+├── pages/                     # 7 个 Streamlit 页面
 │   ├── 01_⚙️_配置.py
 │   ├── 02_🔍_发现职位.py
 │   ├── 03_📊_审核挑选.py
 │   ├── 04_✨_生成简历.py
 │   ├── 05_📈_投递追踪.py
-│   └── 06_📖_使用说明.py
+│   ├── 06_📖_使用说明.py
+│   └── 07_🎯_校准.py
 ├── modules/                   # 核心模块
 │   ├── llm.py                # LLM 抽象层（DeepSeek/OpenAI/Ollama）
 │   ├── resume_parser.py      # 简历解析（PDF/DOCX → 结构化）
@@ -165,6 +168,32 @@ streamlit run app.py
 | `output` | `bilingual` / `resume_format` | 是否双语、输出格式（HTML） |
 
 > 🔒 `config.yaml`、`data/`、`resume/`、`output/`、`.backups/` 均已被 `.gitignore` 忽略，**不会进入版本库**，请放心填写本地信息。
+
+---
+
+## ❓ 常见问题（FAQ / Troubleshooting）
+
+**Q1. 一启动就报 `FileNotFoundError: config.yaml`？**
+这是最常见的问题。仓库出于隐私**不包含** `config.yaml`（已在 `.gitignore` 中）。首次运行**必须**先从模板复制：
+```bash
+cp config.example.yaml config.yaml   # Windows: copy config.example.yaml config.yaml
+```
+然后至少填入 `llm.<provider>.api_key`。否则 `app.py` 读取配置时会直接崩溃、页面白屏。
+
+**Q2. 页面能打开，但「发现职位 / AI 决策」点了报错或没反应？**
+多半是没配 LLM API Key，或所选 `provider` 与实际填的密钥不一致。检查 `config.yaml` 的 `llm.provider` 与对应区块的 `api_key`。
+
+**Q3. 海外职位搜索报浏览器相关错误？**
+`playwright` 装完还需下载浏览器内核：
+```bash
+playwright install chromium
+```
+
+**Q4. 国内平台（Boss直聘/猎聘）采集不到数据？**
+国内采集依赖**本机 Chrome + CDP 采集器**（终端 1 的 `boss_collector_cdp.py`），且需要在弹出的 Chrome 里先手动登录一次。仅启动 Web 界面（终端 2）不会采集国内数据。
+
+**Q5. 怎么确认「整个应用还能正常启动」？**
+本仓库配置了 GitHub Actions 冒烟测试（见页顶徽章 / `.github/workflows/smoke-test.yml`）：每次 push 或 PR 会自动装依赖、编译全部 `.py`、无头启动 Streamlit 并做健康检查。**徽章为绿色即代表应用可正常启动。**
 
 ---
 

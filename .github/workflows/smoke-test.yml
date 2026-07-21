@@ -1,0 +1,67 @@
+name: smoke-test
+
+# 何时触发：向 master 推送、或向 master 发起/更新 PR 时
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:        # 允许在 Actions 页面手动点击运行
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1) 把仓库代码检出到 runner
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) 安装 Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # 3) 安装依赖（失败即红灯）
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4) 语法编译检查：任何 .py 语法错误都会在这里被拦下
+      - name: Compile all Python files
+        run: |
+          python -m compileall -q app.py modules pages analytics
+
+      # 5) 造一个最小可用的 config.yaml（真实密钥不进 CI）
+      - name: Prepare minimal config
+        run: cp config.example.yaml config.yaml
+
+      # 6) 无头启动 Streamlit，做健康检查后关闭
+      #    —— 这一步直接验证「网页到底能不能打开」
+      - name: Boot Streamlit (headless health check)
+        run: |
+          streamlit run app.py \
+            --server.headless true \
+            --server.port 8501 \
+            --server.address 127.0.0.1 &
+          APP_PID=$!
+          echo "streamlit pid=$APP_PID"
+
+          # 最多等 60 秒，轮询首页是否返回 200
+          for i in $(seq 1 30); do
+            if curl -sSf http://127.0.0.1:8501/ >/dev/null 2>&1; then
+              echo "✅ Streamlit is up (attempt $i)"
+              kill $APP_PID 2>/dev/null || true
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "❌ Streamlit did not become healthy in time"
+          # 打印启动日志便于排错
+          kill $APP_PID 2>/dev/null || true
+          exit 1
