@@ -7,8 +7,9 @@
 - 诊断七维 fit_overall 与真实过筛的相关性（实验显示接近 0）
 
 注意：本页读取 analytics 的 SQLite(applications) 数据。网页「📈 投递追踪」用的是另一套
-JSON 存储（modules.tracker），两者尚未打通（见改进方案 Phase 2）；要看到数据，
-请先通过 score.py / collect 把带结果的记录写入 SQLite，或把追踪结果回流。
+JSON 存储（modules.tracker），两者现已打通——追踪页每次状态更新会**自动回灌 SQLite**，
+「✨ 生成简历」页生成后也会写入追踪。因此真实投递结果会自动流入本页校准。
+若历史数据未同步，可在追踪页点「🔄 回灌校准库」一键补齐。
 """
 
 import streamlit as st
@@ -20,6 +21,9 @@ from modules.store import (
     suggest_competition_factor, load_competition_overrides, save_competition_overrides,
     get_all,
 )
+
+from modules.auth import require_auth
+require_auth()
 
 st.title("🎯 校准（竞争力因子 + 匹配度诊断）")
 st.caption("基于真实投递结果标签校准「竞争力因子」，并诊断七维匹配度的预测力。对应 analytics/tune.py。")
