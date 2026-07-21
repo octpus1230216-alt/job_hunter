@@ -35,18 +35,12 @@ if not all_jobs:
     st.stop()
 
 if not st.session_state.get("resume_parsed"):
-    st.warning("⚠️ 未检测到简历，决策通道无法运行。请先在 ⚙️ 配置 上传简历（匹配度仍基于发现页已算结果展示）。")
+    st.warning("⚠️ 未检测到简历，决策通道无法运行。请先在 ⚙️ 配置 上传简历（运行 AI 决策通道后可获得过筛概率与建议）。")
 
 
 # ============================================================
 # 辅助函数
 # ============================================================
-def _score_of(job: dict) -> int:
-    """发现页已算的匹配度（七维/5维 overall_score）。"""
-    m = job.get("_match") or {}
-    return int(m.get("overall_score", 0) or 0)
-
-
 def _decision_of(job: dict) -> dict:
     """决策通道结果 {apply, pass_prob, reason, competition_level}。"""
     return job.get("_decision") or {}
@@ -71,7 +65,6 @@ def _build_table(jobs: list) -> pd.DataFrame:
             "平台": j.get("source_platform", j.get("source", "")),
             "竞争力": comp,
             "过筛概率": pp if pp is not None else "-",
-            "匹配度": _score_of(j),
             "建议": ("✅投" if dec.get("apply") == 1 else "❌不投") if pp is not None else "-",
         })
     return pd.DataFrame(rows)
@@ -116,7 +109,7 @@ with run_col:
 with info_col:
     st.caption(
         "决策通道 = 让 AI 直接判断「是否建议投递 + 真实过筛概率」，并内置对顶级厂的竞争折扣。"
-        "实验显示它比纯匹配度更贴近真实录取（AUC≈0.64）。未运行时按匹配度排序。"
+        "实验显示它比纯匹配度更贴近真实录取（AUC≈0.64）。未运行决策时按公司名展示。"
     )
 
 # 决策结果概览
@@ -132,18 +125,18 @@ f1, f2 = st.columns(2)
 with f1:
     filter_company = st.text_input("🔍 按公司/职位筛选", placeholder="输入关键词")
 with f2:
-    sort_options = ["按过筛概率", "按匹配度", "按公司名", "按时间"]
+    sort_options = ["按过筛概率", "按公司名", "按时间"]
     sort_by = st.selectbox("排序方式", sort_options, index=0 if has_decision else 1)
 
-min_score = st.slider("最低分过滤（过筛概率或匹配度）", 0, 100, 0, 5)
+min_score = st.slider("最低过筛概率过滤", 0, 100, 0, 5)
 
 
 def _primary(job: dict) -> float:
-    """当前排序口径下的主分数，用于滑块过滤。"""
+    """用于滑块过滤的主分数（仅过筛概率，无公开数字分）。"""
     if sort_by == "按过筛概率":
         p = _decision_of(job).get("pass_prob")
         return float(p) if p is not None else -1.0
-    return float(_score_of(job))
+    return 0.0
 
 
 # 排序（按时间 = 保持插入顺序，发现页新岗位插在最前）
@@ -151,9 +144,7 @@ if sort_by == "按公司名":
     all_jobs.sort(key=lambda j: (j.get("company", "") or "").lower())
 elif sort_by == "按过筛概率":
     all_jobs.sort(key=lambda j: _decision_of(j).get("pass_prob", -1), reverse=True)
-elif sort_by == "按匹配度":
-    all_jobs.sort(key=_score_of, reverse=True)
-# 按时间：不动
+# 按公司名 / 按时间：不动
 
 # 过滤
 filtered = [j for j in all_jobs if _primary(j) >= min_score]
@@ -182,14 +173,13 @@ for job in filtered:
     location = job.get("location", "")
     industry_tag = job.get("_industry_tag", "")
     dec = _decision_of(job)
-    score = _score_of(job)
     pass_prob = dec.get("pass_prob")
     comp = dec.get("competition_level") or (job.get("_match", {}) or {}).get("competition") or ""
 
     key = _sel_key(job)
     is_selected = key in st.session_state.selected_keys
 
-    # 标题行：竞争力徽章 + 主分数
+    # 标题行：竞争力徽章 + 决策状态
     mark = "✅" if is_selected else "⬜"
     badge = f" · 竞争力[{comp}]" if comp else ""
     if pass_prob is not None:
@@ -197,7 +187,7 @@ for job in filtered:
                 + ")  过筛概率 " + str(pass_prob) + badge)
     else:
         head = (mark + " " + str(company) + " - " + str(title) + " (" + str(location)
-                + ")  匹配度 " + str(score) + badge)
+                + ")  待决策" + badge)
 
     with st.expander(head):
         desc = job.get("description", "")
@@ -210,7 +200,7 @@ for job in filtered:
             st.markdown(f"**🤖 决策**：{'建议投递 ✅' if dec.get('apply') == 1 else '不建议 ❌'} ｜ "
                         f"过筛概率 **{pass_prob}** ｜ 理由：{dec.get('reason', '-')}")
         else:
-            st.caption(f"匹配度 {score}/100（点上方「运行 AI 决策」可获过筛概率与建议）")
+            st.caption("点上方「运行 AI 决策」可获过筛概率与建议")
 
         if industry_tag:
             st.caption(f"行业标签：{industry_tag}")
