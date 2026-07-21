@@ -32,6 +32,8 @@ data/companies/
 data/search_tasks/
 data/daily_digests/
 data/domestic_jobs/
+data/profile/
+data/recommendations/
 resume/
 output/
 .chrome_profile/
