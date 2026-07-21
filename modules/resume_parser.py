@@ -16,6 +16,7 @@ class ResumeParser:
         if data_dir is None:
             data_dir = Path(__file__).parent.parent / "data"
         self.data_dir = data_dir
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.parsed_cache = data_dir / "resume_parsed.json"
 
     def parse(self, file_path: str, llm_client=None) -> dict:
@@ -39,7 +40,14 @@ class ResumeParser:
 
         # 第二步：LLM 结构化（如果提供）
         if llm_client:
-            structured = self._structure_with_llm(raw_text, llm_client)
+            try:
+                structured = self._structure_with_llm(raw_text, llm_client)
+            except Exception as e:
+                # AI 结构化失败时不让整页崩，回退到纯文本
+                structured = {
+                    "raw_text": raw_text,
+                    "llm_error": f"AI 结构化失败，已回退纯文本: {e}",
+                }
         else:
             structured = {"raw_text": raw_text}
 
