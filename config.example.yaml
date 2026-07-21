@@ -86,3 +86,6 @@ output:
   resume_format: html
   bilingual: true
   naming: '{company}_{role}_{date}'
+
+internal:
+  calibration_mode: false          # 校准页（含数字分数诊断）默认仅内部开启；普通用户无需关注数字匹配分

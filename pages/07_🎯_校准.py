@@ -28,6 +28,17 @@ require_auth()
 st.title("🎯 校准（竞争力因子 + 匹配度诊断）")
 st.caption("基于真实投递结果标签校准「竞争力因子」，并诊断七维匹配度的预测力。对应 analytics/tune.py。")
 
+# 内部开关：数字分数诊断默认仅内部开启，普通用户无需关注
+_calibration_mode = (st.session_state.get("config") or {}).get("internal", {}).get("calibration_mode", False)
+if not _calibration_mode:
+    st.info(
+        "🛡️ 本页为内部功能（包含数字分数诊断），默认仅内部开启。\n\n"
+        "普通用户无需关注数字匹配分——是否投递请以「📊 审核挑选」页的 "
+        "**AI 决策通道**（过筛概率 + 建议 + 理由）为准。\n\n"
+        "如需开启数字校准：在 `config.yaml` 的 `internal` 段加入 `calibration_mode: true`。"
+    )
+    st.stop()
+
 conn = init_db(DEFAULT_DB)
 
 # ============================================================
