@@ -3,13 +3,20 @@
 # config.yaml 不会被 git 追踪（已在 .gitignore 中）
 
 llm:
-  provider: deepseek              # deepseek / openai / ollama
+  provider: deepseek              # deepseek / openai / ollama / custom
   deepseek:
     api_key: ""                   # 填入你的 DeepSeek API Key
     base_url: https://api.deepseek.com
     model: deepseek-chat
   openai:
     api_key: ""                   # 填入你的 OpenAI API Key
+    base_url: https://api.openai.com/v1
+    model: gpt-4o
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5:14b
+  custom:                        # 任何兼容 OpenAI /v1/chat/completions 的端点（通义千问/智谱/GLM/Kimi/Claude 代理等）
+    api_key: ""                  # 填入你的 API Key
     base_url: https://api.openai.com/v1
     model: gpt-4o
   ollama:
