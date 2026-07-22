@@ -427,6 +427,9 @@ with tab2:
 
     # AI 生成的直达搜索链接 → 改为按钮
     keywords_zh = report.get("search_keywords", {}).get("zh", [])
+    # 去重（AI 可能生成重复关键词，避免按钮 key 冲突与重复展示）
+    _seen: set = set()
+    keywords_zh = [k for k in keywords_zh if not (k in _seen or _seen.add(k))]
     core_kw = keywords_zh[:5] if keywords_zh else []
     trans_kw = keywords_zh[5:] if len(keywords_zh) > 5 else []
 
@@ -435,14 +438,14 @@ with tab2:
 
         if core_kw:
             st.markdown("**核心方向：**")
-            for kw in core_kw:
+            for i, kw in enumerate(core_kw):
                 col_a, col_b = st.columns([3, 1])
                 with col_a:
                     boss_url = f"https://www.zhipin.com/web/geek/job?query={kw}"
                     st.markdown(f"**{kw}**")
                     st.caption("Boss直聘 → 点击右侧按钮搜索")
                 with col_b:
-                    if st.button(f"🔍 搜索", key=f"btn_boss_{kw}", use_container_width=True,
+                    if st.button(f"🔍 搜索", key=f"btn_boss_core_{i}_{kw}", use_container_width=True,
                                  help=f"在 CDP Chrome 中搜索 Boss直聘: {kw}"):
                         if not cdp_running:
                             st.warning("⚠️ CDP 脚本未运行，请先在终端执行: python boss_collector_cdp.py")
@@ -460,14 +463,14 @@ with tab2:
 
         if trans_kw:
             st.markdown("**可迁移方向：**")
-            for kw in trans_kw:
+            for i, kw in enumerate(trans_kw):
                 col_a, col_b = st.columns([3, 1])
                 with col_a:
                     boss_url = f"https://www.zhipin.com/web/geek/job?query={kw}"
                     st.markdown(f"**{kw}**")
                     st.caption("Boss直聘 → 点击右侧按钮搜索")
                 with col_b:
-                    if st.button(f"🔍 搜索", key=f"btn_boss_{kw}", use_container_width=True):
+                    if st.button(f"🔍 搜索", key=f"btn_boss_trans_{i}_{kw}", use_container_width=True):
                         if not cdp_running:
                             st.warning("⚠️ CDP 脚本未运行")
                         else:
