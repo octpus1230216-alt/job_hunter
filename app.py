@@ -57,7 +57,11 @@ if "config" not in st.session_state:
     from pathlib import Path
     config_path = Path(__file__).parent / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
-        st.session_state.config = yaml.safe_load(f)
+        _cfg = yaml.safe_load(f) or {}
+    # 默认配置合并：数字校准页默认仅内部开启
+    _cfg.setdefault("internal", {})
+    _cfg["internal"].setdefault("calibration_mode", False)
+    st.session_state.config = _cfg
 
 
 # ============================================================

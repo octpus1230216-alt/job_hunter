@@ -73,7 +73,6 @@ if applications:
             "ID": app["id"],
             "公司": app["company"],
             "职位": app["title"],
-            "匹配度": app.get("match_score", "-"),
             "状态": ApplicationTracker.STATUSES.get(app["status"], app["status"]),
             "状态代码": app["status"],
             "更新时间": app["updated_at"][:10],
@@ -81,7 +80,7 @@ if applications:
 
     df = pd.DataFrame(rows)
     st.dataframe(
-        df[["公司", "职位", "匹配度", "状态", "更新时间"]],
+        df[["公司", "职位", "状态", "更新时间"]],
         use_container_width=True,
         height=400,
     )
