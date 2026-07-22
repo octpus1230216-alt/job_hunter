@@ -1,10 +1,12 @@
 """
-半自动找工作工具 — 主入口
-Streamlit 多页面应用
+半自动找工作工具 — 主入口（框架）
+Streamlit 多页面应用，使用 st.navigation 控制导航（意见 F：按任务流重组）。
 
-启动方式：
-    cd job-hunter
-    streamlit run app.py
+导航策略：
+- 主流程页（使用说明 / 配置 / 推荐岗位 / 精投 / 海投 / 投递追踪 / 校准）显示在自定义侧边栏
+- 「发现职位 / 审核挑选 / 生成简历」作为「海投」的二级组件页，不在主侧边栏显示，
+  通过海投页的入口或这里折叠区的 page_link 进入（意见 F-7）
+- 所有页面都注册到 st.navigation（position=hidden），保证 st.switch_page / st.page_link 可用
 """
 
 import streamlit as st
@@ -17,8 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 全局样式（只隐藏 Streamlit 默认的菜单和页脚，
-# 保留侧边栏导航）
+# 全局样式：隐藏默认菜单/页脚，保留自定义侧边栏
 hide_streamlit_style = """
 <style>
     #MainMenu {visibility: hidden;}
@@ -33,17 +34,26 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 初始化 session state
 # ============================================================
 if "resume_parsed" not in st.session_state:
-    # 尝试自动加载已保存的简历
     import json
-    resume_cache_path = Path(__file__).parent / "data" / "resume_parsed.json"
-    if resume_cache_path.exists():
-        try:
-            with open(resume_cache_path, "r", encoding="utf-8") as f:
-                st.session_state.resume_parsed = json.load(f)
-        except Exception:
-            st.session_state.resume_parsed = None
-    else:
-        st.session_state.resume_parsed = None
+    st.session_state.resume_parsed = None
+    # 优先从用户选择的个人信息目录加载（意见 G-6）
+    try:
+        from modules.profile_store import get_profile_store
+        _parsed = get_profile_store().load_parsed()
+        if _parsed:
+            st.session_state.resume_parsed = _parsed
+    except Exception:
+        pass
+    # 兼容旧路径 data/resume_parsed.json
+    if st.session_state.resume_parsed is None:
+        _old = Path(__file__).parent / "data" / "resume_parsed.json"
+        if _old.exists():
+            try:
+                with open(_old, "r", encoding="utf-8") as f:
+                    st.session_state.resume_parsed = json.load(f)
+            except Exception:
+                pass
+
 if "llm_client" not in st.session_state:
     st.session_state.llm_client = None
 if "jobs_found" not in st.session_state:
@@ -54,22 +64,19 @@ if "selected_jobs" not in st.session_state:
     st.session_state.selected_jobs = []
 if "config" not in st.session_state:
     import yaml
-    from pathlib import Path
     config_path = Path(__file__).parent / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         _cfg = yaml.safe_load(f) or {}
-    # 默认配置合并：数字校准页默认仅内部开启
     _cfg.setdefault("internal", {})
     _cfg["internal"].setdefault("calibration_mode", False)
     st.session_state.config = _cfg
 
 
 # ============================================================
-# 缓存的 LLM 客户端（唯一的定义，其他页面通过 session_state 访问）
+# 缓存的 LLM 客户端
 # ============================================================
 @st.cache_resource
 def get_or_init_llm():
-    """缓存 LLM 客户端，避免每次 rerun 都重建连接"""
     try:
         from modules.llm import LLMClient
         return LLMClient()
@@ -78,78 +85,66 @@ def get_or_init_llm():
 
 
 # ============================================================
-# 侧边栏 — 状态指示
+# 自定义侧边栏导航（主流程 + 海投组件）
 # ============================================================
 with st.sidebar:
-    st.markdown("---")
-    st.subheader("📌 运行状态")
+    st.markdown("## 🎯 半自动找工作")
 
+    # 主流程
+    st.page_link("pages/08_📖_使用说明.py", label="📖 使用说明", use_container_width=True)
+    st.page_link("pages/01_⚙️_配置.py", label="⚙️ 配置", use_container_width=True)
+    st.page_link("pages/10_🌟_推荐岗位.py", label="🌟 推荐岗位", use_container_width=True)
+    st.page_link("pages/02_🎯_精投.py", label="🎯 精投", use_container_width=True)
+    st.page_link("pages/03_🌊_海投.py", label="🌊 海投", use_container_width=True)
+    st.page_link("pages/07_📈_投递追踪.py", label="📈 投递追踪", use_container_width=True)
+    st.page_link("pages/09_🎯_校准.py", label="🎯 校准（内部）", use_container_width=True)
+
+    # 海投的二级组件页（不在主流程显示，意见 F-7）
+    with st.expander("🔧 海投 · 组件页"):
+        st.caption("以下为「海投」流程的组件，从「🌊 海投」页进入更顺。")
+        st.page_link("pages/04_🔍_发现职位.py", label="🔍 发现职位", use_container_width=True)
+        st.page_link("pages/05_📊_审核挑选.py", label="📊 审核挑选", use_container_width=True)
+        st.page_link("pages/06_✨_生成简历.py", label="✨ 生成简历", use_container_width=True)
+
+    st.divider()
+
+    # 运行状态
+    st.subheader("📌 运行状态")
     if st.session_state.get("resume_parsed"):
         st.success("✅ 简历已加载")
     else:
         st.warning("⚠️ 请先上传简历")
-
-    # 自动初始化 LLM
     if st.session_state.get("llm_client") is None:
-        llm = get_or_init_llm()
-        if llm is not None:
-            st.session_state.llm_client = llm
-
+        _llm = get_or_init_llm()
+        if _llm is not None:
+            st.session_state.llm_client = _llm
     if st.session_state.get("llm_client"):
         st.success("✅ AI 已就绪")
     else:
         st.warning("⚠️ 请先配置 API")
-
     if st.session_state.get("all_jobs"):
-        count = len(st.session_state.all_jobs)
-        st.info(f"📌 {count} 个待审核岗位")
+        st.info(f"📌 {len(st.session_state.all_jobs)} 个待审核岗位")
     else:
         st.info("📌 暂无待审核岗位")
-
-    st.markdown("---")
+    st.divider()
     st.caption("数据全部存储在本地，不上传任何服务器")
 
 
 # ============================================================
-# 欢迎页
+# 注册全部页面（position=hidden），由自定义侧边栏驱动导航
 # ============================================================
-st.title("🎯 半自动找工作工具")
+pg = st.navigation([
+    "pages/08_📖_使用说明.py",
+    "pages/01_⚙️_配置.py",
+    "pages/10_🌟_推荐岗位.py",
+    "pages/02_🎯_精投.py",
+    "pages/03_🌊_海投.py",
+    "pages/07_📈_投递追踪.py",
+    "pages/09_🎯_校准.py",
+    # 海投组件页（注册但不显示在侧边栏主流程）
+    "pages/04_🔍_发现职位.py",
+    "pages/05_📊_审核挑选.py",
+    "pages/06_✨_生成简历.py",
+], position="hidden")
 
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric(label="工作流程", value="5 步")
-with col2:
-    st.metric(label="数据存储", value="全本地")
-with col3:
-    st.metric(label="AI后端", value="3 种")
-with col4:
-    st.metric(label="语言支持", value="中英双语")
-
-st.markdown("---")
-
-st.markdown("""
-### 👋 欢迎使用
-
-这是一个**半自动**的求职辅助工具，帮你高效完成找工作流程中最耗时的部分。
-
-**核心功能（按任务流组织）：**
-
-| 功能 | 说明 |
-|------|------|
-| 🎯 **精投** | 贴一个目标 JD，AI 找不匹配、生成定制简历+求职信、标记已投（适合最想进的公司） |
-| 🌊 **海投** | 批量岗位跑 AI 决策通道，勾选认可的一次性标记已投（适合广撒网） |
-| 🔍 **发现/导入** | 从海外平台搜索或粘贴 JD，作为「海投」的岗位池 |
-| 🎨 **定制简历** | 根据目标公司风格，自动生成定制中英文简历和求职信 |
-| 📈 **追踪进度** | 记录投递状态，回灌校准库 |
-
-### 🚀 快速开始
-
-1. 点击左侧 **⚙️ 配置**，上传主简历，设置 API Key
-2. **🎯 精投**：贴最想进的公司 JD → AI 找不匹配 → 生成简历/求职信 → 标记已投
-3. **🌊 海投**：先去 **🔍 发现职位** 采集岗位池 → 回来批量决策、勾选、标记已投
-4. 拿着简历去平台投递，回来在 **📈 投递追踪** 查看进度、回灌真实结果
-
-> 💡 **所有数据都存在你本地电脑上**，简历不会上传到任何第三方。
-> 📖 遇到问题？查看左侧的 **📖 使用说明** 页面。
-""")
+pg.run()

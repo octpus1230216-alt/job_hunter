@@ -202,11 +202,21 @@ JD摘要：
 
         return filepath
 
-    def generate_all(self, resume: dict, job: dict, bilingual: bool = True) -> dict:
-        """一键生成：风格分析 -> 定制简历 -> Cover Letter + 投递速查卡（双语）"""
+    def generate_all(self, resume: dict, job: dict, bilingual: bool = True,
+                     generate_cover_letter: bool = True) -> dict:
+        """一键生成：风格分析 -> 定制简历 ->（可选）Cover Letter + 投递速查卡（双语）
+
+        generate_cover_letter=False 时跳过求职信生成与保存（意见 E-2：是否生成求职信开关）。
+        """
         style_result = self.style_analyzer.analyze(job)
         customized = self.generate_resume(resume, job, style_result, bilingual)
-        cover_letter = self.generate_cover_letter(resume, job, style_result, bilingual)
+
+        cover_letter = {}
+        cl_path = ""
+        if generate_cover_letter:
+            cover_letter = self.generate_cover_letter(resume, job, style_result, bilingual)
+            cl_path = self.save_cover_letter(cover_letter, job)
+
         quick_card = self.generate_quick_card(resume, job, style_result, bilingual)
 
         # 保存文件
@@ -217,8 +227,6 @@ JD摘要：
         else:
             resume_path = self.save_as_html(customized, job)
             resume_files = {"default": str(resume_path)}
-
-        cl_path = self.save_cover_letter(cover_letter, job)
 
         return {
             "style": style_result,

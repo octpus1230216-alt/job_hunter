@@ -111,6 +111,52 @@ if not st.session_state.get("llm_client"):
     st.warning("⚠️ 请先在 ⚙️ 配置页面设置 API Key")
     st.stop()
 
+# ---- 采集方式切换（意见 D-4）：每日推荐 / AI 匹配搜索 / 自定义岗位搜索 ----
+_collect_mode = st.radio(
+    "选择采集方式",
+    ["AI 匹配搜索", "自定义岗位搜索", "🌟 每日推荐岗位"],
+    horizontal=True, index=0,
+    help="每日推荐岗位由独立「推荐岗位」页承载；这里聚焦 AI 搜索与手动粘贴。",
+)
+if _collect_mode == "🌟 每日推荐岗位":
+    st.page_link("pages/10_🌟_推荐岗位.py", label="前往 🌟 推荐岗位（每日 15 条）", icon="🌟")
+    st.info("「每日推荐岗位」已在侧边栏独立成页，点击上方进入。")
+    st.stop()
+elif _collect_mode == "自定义岗位搜索":
+    st.subheader("📋 自定义岗位搜索（手动粘贴 JD）")
+    _pasted = st.text_area("批量 JD（每个岗位之间用 --- 分隔）", height=220,
+                            placeholder="公司：Acme\n职位：Backend Engineer\nJD 内容…\n---\n公司：Globex\n职位：…")
+    if st.button("解析并加入岗位池", key="dis_custom_parse"):
+        if _pasted:
+            _blocks = [b.strip() for b in _pasted.split("---") if b.strip()]
+            _pool = list(st.session_state.get("all_jobs", []) or [])
+            _added = 0
+            for _b in _blocks:
+                _lines = _b.splitlines()
+                _comp = ""; _tit = ""; _desc = []
+                for _ln in _lines:
+                    if _ln.startswith("公司") or _ln.lower().startswith("company"):
+                        _comp = _ln.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    elif _ln.startswith("职位") or _ln.lower().startswith("title"):
+                        _tit = _ln.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    else:
+                        _desc.append(_ln)
+                _desc = "\n".join(_desc).strip()
+                if not _tit and _desc:
+                    _tit = _desc.splitlines()[0][:40] if _desc else "未命名岗位"
+                _pool.append({"company": _comp or "未知公司", "title": _tit or "未命名岗位",
+                              "location": "", "description": _desc, "job_url": "",
+                              "source_platform": "发现-自定义"})
+                _added += 1
+            st.session_state.all_jobs = _pool
+            if _added:
+                st.success(f"已加入 {_added} 个岗位到岗位池，去「🌊 海投」批量决策。")
+                st.rerun()
+        else:
+            st.warning("请先粘贴 JD。")
+    st.stop()
+# 否则：AI 匹配搜索（页面原有主体逻辑继续执行）
+
 # ============================================================
 # 后台任务状态面板
 # ============================================================
