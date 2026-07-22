@@ -10,6 +10,7 @@ build/
 venv/
 env/
 .venv/
+.buildenv/
 
 # Streamlit
 .streamlit/secrets.toml

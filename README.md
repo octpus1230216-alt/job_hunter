@@ -1,216 +1,125 @@
-# 🎯 job-hunter · 半自动找工作工具
+# 半自动找工作工具（job_hunter）
 
-[![smoke-test](https://github.com/octpus1230216-alt/job_hunter/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/octpus1230216-alt/job_hunter/actions/workflows/smoke-test.yml)
+一个**半自动**的求职辅助工具：帮你发现岗位、用 AI 做投递决策、按公司风格生成定制简历与求职信，但最终投递由你手动完成（避免封号风险）。
 
-> **Semi-automatic job-hunting toolkit** — discover roles across domestic (Boss直聘/猎聘) and overseas (LinkedIn/Indeed/Glassdoor) platforms, let AI match your résumé to each JD, and generate tailored bilingual résumés — all your data stays **100% local**.
->
-> 一个**半自动**的求职辅助工具：帮你完成求职流程中最耗时的部分（发现职位、智能匹配、定制简历），但**最终是否投递由你决定**，工具不会自动代投。
+> 所有数据默认存储在**本地**，简历不上传任何第三方。
 
 ---
 
-## ✨ 功能特性
+## 导航（按任务流组织）
 
-| 模块 | 说明 |
+| 页面 | 作用 |
 |------|------|
-| 🔍 **职位发现** | 海外平台（LinkedIn / Indeed / Glassdoor，基于 [JobSpy](https://github.com/BericCrous/jobspy)）；国内平台通过浏览器 CDP 采集 Boss直聘 / 猎聘 |
-| 🧠 **AI 职业定位** | 上传简历后 AI 自动分析核心方向、可迁移能力、弱项提醒、中英双语搜索词 |
-| 🤖 **智能匹配** | 五维度评分（技能/经验/学历/文化/综合），搜索即匹配 |
-| 🎯 **AI 决策排序** | 审核页一键运行「决策通道」：判断建议投递 + 真实过筛概率（内置顶级厂竞争折扣），按过筛概率排序 |
-| 🎨 **定制简历** | 根据目标公司文化风格（大厂 / 创业 / 外企 / 咨询），LLM 定制 + HTML 渲染，支持中英双语 |
-| ✉️ **求职信 & 速查卡** | 一键生成 Cover Letter 与面试速查卡（自我介绍 / 为什么选这家 / 期望薪资 / 薄弱点应对） |
-| 📊 **投递追踪** | 状态管理、管道看板，全程本地记录 |
-| 🧰 **竞争力校准** | 校准页基于真实投递结果刷新 `COMPETITION_FACTOR`（一键写回覆盖文件） |
-| 🔄 **数据闭环** | 投递追踪结果自动回灌校准库、生成即登记追踪；「🎯 校准」页用真实结果持续校准 |
-| 🔒 **隐私优先 + 可选鉴权** | 简历/配置/采集数据全本地；设置 `JOBHUNTER_PASSWORD` 后启用访问密码 |
+| 📖 使用说明 | 欢迎 / 快速开始 / 运行服务 / FAQ |
+| ⚙️ 配置 | 上传简历、配置 AI、求职偏好、语言；首次运行选择个人信息存放位置 |
+| 🌟 推荐岗位 | 每天 08:00 自动推荐 15 个世界名企在招方向（可刷新 / 看历史） |
+| 🎯 精投 | 贴一个目标 JD → AI 找不匹配 → 生成定制简历+求职信 → 标记已投 |
+| 🌊 海投 | 岗位池批量跑 AI 决策通道 → 勾选认可 → 一次性标记已投 |
+| 🔍 发现职位 | 海外平台搜索 / 手动粘贴 JD（海投的岗位池，二级组件页） |
+| 📊 审核挑选 | 逐条过审（海投的组件页） |
+| ✨ 生成简历 | 批量生成简历/求职信（海投的组件页） |
+| 📈 投递追踪 | 记录投递状态，回灌校准库 |
+| 🎯 校准 | 内部页（需 `internal.calibration_mode=true`），用真实结果校准 |
 
-**AI 后端**：支持 DeepSeek / OpenAI / Ollama 三种，统一抽象层切换。
-
----
-
-## 🏗️ 架构与工作原理
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  终端 1：boss_collector_cdp.py  (端口 9999)          │
-│   · 启动系统 Chrome（持久化用户目录 ~/.chrome_profile） │
-│   · CDP 协议层拦截 Boss直聘 API 响应（绕过 CSP）      │
-│   · 统一 HTTP 服务：/status /jobs /navigate /clear     │
-└───────────────────────────┬─────────────────────────────┘
-                            │ 指令桥接 (HTTP POST)
-┌───────────────────────────┴─────────────────────────────┐
-│  终端 2：streamlit run app.py  (端口 8501)            │
-│   · 7 个页面（配置 / 发现 / 审核 / 生成 / 追踪 / 校准 / 说明）  │
-│   · AI 搜索关键词 → 按钮 → 触发 Chrome 自动跳转采集  │
-└─────────────────────────────────────────────────────────┘
-
-数据流向：简历 PDF/DOCX → 解析 → data/resume_parsed.json
-         职位采集 → data/ → 匹配 → 生成 → output/（本地 HTML 简历）
-```
-
-**为什么用 CDP 层采集？** 浏览器扩展方案因 CSP + 隔离世界限制难以稳定注入；本项目改为在 Chrome DevTools Protocol 层拦截网络响应，不依赖页面 JS，更稳定且能规避反爬检测。详情见 `docs/DESIGN_SPEC.md`。
-
-> ⚠️ **合规提醒**：自动采集招聘网站数据可能违反部分平台的《用户协议》。本项目仅供**个人求职**学习与研究使用，请自行评估风险、控制采集频率，勿用于商业爬取或大规模抓取。
+> 「发现职位 / 审核挑选 / 生成简历」是「海投」的二级组件页，不在主侧边栏显示，可从「🌊 海投」页进入。
 
 ---
 
-## 📂 目录结构
-
-```
-job-hunter/
-├── app.py                      # Streamlit 主入口
-├── boss_collector_cdp.py      # 终端1：Chrome CDP 采集器 + 指令桥接（端口 9999）
-├── search_worker.py            # 海外搜索后台 worker
-├── daily_digest.py            # 每日职位摘要
-├── config.example.yaml        # 配置模板（复制为 config.yaml 后填写）
-├── requirements.txt
-├── .gitignore                 # 已忽略 config.yaml / data/ / resume / output / .backups
-├── pages/                     # 7 个 Streamlit 页面
-│   ├── 01_⚙️_配置.py
-│   ├── 02_🔍_发现职位.py
-│   ├── 03_📊_审核挑选.py
-│   ├── 04_✨_生成简历.py
-│   ├── 05_📈_投递追踪.py
-│   ├── 06_📖_使用说明.py
-│   └── 07_🎯_校准.py
-├── modules/                   # 核心模块
-│   ├── llm.py                # LLM 抽象层（DeepSeek/OpenAI/Ollama）
-│   ├── resume_parser.py      # 简历解析（PDF/DOCX → 结构化）
-│   ├── matcher.py            # 智能匹配评分
-│   ├── style_analyzer.py     # 公司风格分析
-│   ├── generator.py         # 简历/求职信生成
-│   ├── careeer_advisor.py    # AI 职业定位
-│   ├── tracker.py            # 投递追踪
-│   ├── ai_searcher.py       # AI 搜索词生成
-│   └── discovery/           # 职位发现（overseas.py / company_finder.py）
-├── docs/                     # 设计文档（中文）
-│   ├── PRD.md / DESIGN_SPEC.md / BOUNDARY_RULES.md / INTERACTION_STATES.md
-├── analytics/                # 复盘分析模块：收集投递结果→分析→对照改简历（详见 analytics/README.md）
-└── run_boss_collector.bat   # Windows 一键启动采集器
-```
-
-> 📌 仓库中 `legacy/` 目录（原 `chrome_extension/`、`browser_script/`、`collector_server.py.archived`）为**历史方案**（已弃用，CDP 方案取代），保留仅供参考。
-
----
-
-## 📉 复盘分析模块（`analytics/`）
-
-> 把「投出去的结果」变成「下一轮更准的投递」。收集你在 BOSS / 脉脉 的投递结果（不合适 / 已读不回 / 面试 / offer），分析为什么没回音，对照岗位改简历，并用简历版本 A/B 量化「改简历到底有没有用」。
-
-**两条主线**
-- **目标 A · 前瞻（进攻）**：新岗位来了 → 五维评分（对照原简历）→ 对照 JD 改简历 → 导出 LaTeX / ATS 校验。
-- **目标 B · 复盘（防守）**：已投结果回流 → 评分 → 交叉分析 + A/B 回复率 → 沉淀下一版该怎么改。
-
-**特点**：零依赖、免 API key 即可跑通（LLM 直连 / 导出提示词贴 WorkBuddy 双通道）；原简历支持 `.doc / .docx / .pdf / .txt` 上传解析。详见 [analytics/README.md](./analytics/README.md) 与 [analytics/docs/](./analytics/docs/)。
-
----
-
-## 🚀 快速开始
-
-### 1. 环境要求
-
-- Python **3.10+**
-- 已安装 **Google Chrome**（国内平台采集依赖系统 Chrome）
-- 一个 LLM API Key（DeepSeek / OpenAI，或用本地 Ollama）
-
-### 2. 安装依赖
+## 快速开始
 
 ```bash
-git clone https://github.com/octpus1230216-alt/job_hunter.git
-cd job-hunter
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-playwright install chromium                        # 仅海外采集需要
-```
-
-### 3. 配置
-
-```bash
-cp config.example.yaml config.yaml
-# 编辑 config.yaml，填入你的 LLM API Key 与求职偏好
-```
-
-### 4. 启动（两个终端）
-
-**终端 1 — 启动采集器（国内平台需要）**
-```bash
-python boss_collector_cdp.py
-# 脚本会自动拉起 Chrome（持久化登录态在 ~/.chrome_profile/boss）
-# 服务运行在 http://localhost:9999
-```
-> Windows 用户也可直接双击 `run_boss_collector.bat`。
-
-**终端 2 — 启动 Web 界面**
-```bash
 streamlit run app.py
 # 打开 http://localhost:8501
 ```
 
-### 5. 使用流程
-
-1. **⚙️ 配置**：上传主简历，填写 API Key
-2. **🔍 发现职位**：海外自动搜索，或国内走 CDP 采集 Boss直聘 / 猎聘
-3. **📊 审核挑选**：筛选你想投的岗位
-4. **✨ 生成简历**：一键生成定制版中英双语简历
-5. **📈 投递追踪**：标记投递状态，回来更新进度
+1. **⚙️ 配置**：上传简历（PDF/DOCX/TXT）→ 选 AI 提供商（推荐 DeepSeek）→ 填 Key → 设偏好。
+2. **🌟 推荐岗位** 或 **🔍 发现职位**：取一批岗位。
+3. **🎯 精投**（深耕单家）或 **🌊 海投**（广撒网）。
+4. 去平台投递，回 **📈 投递追踪** 标记进度。
 
 ---
 
-## ⚙️ 配置说明（config.yaml）
+## 架构
 
-| 区块 | 关键字段 | 说明 |
-|------|----------|------|
-| `llm` | `provider` | `deepseek` / `openai` / `ollama` |
-| `llm.deepseek` | `api_key` / `model` | DeepSeek 密钥与模型（如 `deepseek-chat`） |
-| `personal` | `name` / `email` / `location` | 你的基本信息（仅本地使用） |
-| `preferences` | `target_roles` / `locations` / `salary_min` / `salary_max` | 求职偏好与薪资锚点 |
-| `discovery.overseas` | `countries` / `search_terms` / `proxy` | 海外搜索范围，可选代理 |
-| `discovery.domestic` | `auto_parse` | 国内采集自动解析 |
-| `output` | `bilingual` / `resume_format` | 是否双语、输出格式（HTML） |
-
-> 🔒 `config.yaml`、`data/`、`resume/`、`output/`、`.backups/` 均已被 `.gitignore` 忽略，**不会进入版本库**，请放心填写本地信息。
-
----
-
-## ❓ 常见问题（FAQ / Troubleshooting）
-
-**Q1. 一启动就报 `FileNotFoundError: config.yaml`？**
-这是最常见的问题。仓库出于隐私**不包含** `config.yaml`（已在 `.gitignore` 中）。首次运行**必须**先从模板复制：
-```bash
-cp config.example.yaml config.yaml   # Windows: copy config.example.yaml config.yaml
 ```
-然后至少填入 `llm.<provider>.api_key`。否则 `app.py` 读取配置时会直接崩溃、页面白屏。
-
-**Q2. 页面能打开，但「发现职位 / AI 决策」点了报错或没反应？**
-多半是没配 LLM API Key，或所选 `provider` 与实际填的密钥不一致。检查 `config.yaml` 的 `llm.provider` 与对应区块的 `api_key`。
-
-**Q3. 海外职位搜索报浏览器相关错误？**
-`playwright` 装完还需下载浏览器内核：
-```bash
-playwright install chromium
+app.py                      # 框架：st.navigation(隐藏) + 自定义侧边栏
+pages/                      # 各任务页（均由 app.py 的导航驱动）
+modules/
+  llm.py                    # 多厂商 LLM 客户端（deepseek/openai/ollama/custom）
+  resume_parser.py          # 简历解析（缓存到 data/profile）
+  matcher.py                # AI 决策通道（建议投 + 过筛概率 + 理由）
+  style_analyzer.py         # 公司风格分析
+  generator.py              # 定制简历 + 求职信 + 速查卡（支持 .docx 导出）
+  tracker.py                # 投递追踪（JSON 主存储 + 回灌 analytics SQLite）
+  recommender.py            # 每日岗位推荐引擎
+  profile_store.py          # 个人信息存储抽象（本地 / 云端预留）
+  docx_export.py            # 简历/求职信导出 Word
+  services.py               # 服务层门面（页面只依赖它，便于后端化/移动端化）
+analytics/                  # 校准与统计（SQLite）
+.github/workflows/
+  recommend.yml             # 每日 08:00(北京) 生成并提交 latest.json
 ```
 
-**Q4. 国内平台（Boss直聘/猎聘）采集不到数据？**
-国内采集依赖**本机 Chrome + CDP 采集器**（终端 1 的 `boss_collector_cdp.py`），且需要在弹出的 Chrome 里先手动登录一次。仅启动 Web 界面（终端 2）不会采集国内数据。
+### 服务层与移动端预留（意见 H）
 
-**Q5. 怎么确认「整个应用还能正常启动」？**
-本仓库配置了 GitHub Actions 冒烟测试（见页顶徽章 / `.github/workflows/smoke-test.yml`）：每次 push 或 PR 会自动装依赖、编译全部 `.py`、无头启动 Streamlit 并做健康检查。**徽章为绿色即代表应用可正常启动。**
+页面统一通过 `modules.services` 调用能力，不直接 import 底层模块。
+这道边界让后续把逻辑搬到独立后端、提供移动端 API 时，页面改动最小。
+「移动端友好」本期做到：**导航可解耦、存储可切换（ProfileStore）、AI 决策与生成都是无状态函数**；
+真正的移动 App 是下一步，接口契约已就位。
 
----
+### 评分内部化（意见 B）
 
-## 📄 许可证
-
-本项目基于 **MIT License** 开源 —— 详见 [LICENSE](./LICENSE)。
-
-> 注：MIT 仅覆盖代码本身。你用本工具生成的简历、采集的职位数据等，其权属与合规责任由使用者自行承担。
+普通用户**不看到任何数字匹配分**，只看到 AI 决策结论（过筛概率 + 建议 + 理由）。
+数字分仅保留在内部「🎯 校准」页，用于基于真实投递结果做模型校准。
 
 ---
 
-## 🙏 参考与致谢
+## 每日推荐（意见 D-8）
 
-- [JobSpy](https://github.com/BericCrous/jobspy) — 海外职位抓取
-- [Resume-Matcher](https://github.com/srbhr/Resume-Matcher) — 简历匹配思路
-- `get_jobs` Discussion #250 / `geekgeekrun` — CDP 反检测时间差方案参考
+- **本地**：`python recommender_run.py` 直接生成 `data/recommendations/latest.json`。
+- **云端**：GitHub Actions 每天 08:00（北京时间）自动跑 `recommender_run.py` 并提交 `latest.json`，
+  App 的「🌟 推荐岗位」页直接读取。需在仓库 **Settings → Secrets** 配置 `DEEPSEEK_API_KEY`（可选，缺失也能生成）。
+- 选取原则：世界知名企业 + 最新挂出（jobspy，可选）+ 与简历部分相关 + 行业不限 + 地区可选（读 `preferences.locations`）。
 
 ---
 
-<p align="center">数据全本地 · AI 辅助 · 半自动求职</p>
+## 依赖
+
+```bash
+pip install streamlit pyyaml python-docx   # 核心：python-docx 用于 Word 导出
+pip install jobspy                         # 可选：抓取最新岗位（缺失不影响运行）
+```
+
+> `requirements.txt` 已包含上述依赖；jobspy 为可选，安装失败不影响其它功能。
+
+---
+
+## 桌面安装包（Windows）
+
+把整套应用冻结成**单机可执行程序**：双击启动器即在本地起一个 Streamlit 服务并自动打开浏览器，所有个人数据（简历 / 画像 / 投递记录）默认只存在本机安装目录，不出本机。
+
+### 两种获取方式
+
+1. **GitHub Actions 自动产出（推荐，零本地环境）**
+   - 仓库 **Actions → Build Desktop Installer → Run workflow**（手动触发）；
+   - 或给仓库打 `v*` 标签（如 `v1.0.0`），自动构建并作为 Release 附件发布。
+   - 产物：`job_hunter-setup.exe`（在 Artifacts / Releases 下载）。
+
+2. **本地一键构建**（需本机有 Python 3.11 + [NSIS](https://nsis.sourceforge.io/Download)）
+   ```bat
+   packaging\build.bat
+   ```
+   产物同样在 `dist\job_hunter-setup.exe`。
+
+### 原理与边界
+
+- `desktop/launcher.py`：冻结后的入口，负责拷贝默认配置、找空闲端口、以 headless 方式 `streamlit run app.py`、打开浏览器、并提供“关闭即退出”的小窗口。
+- `packaging/desktop.spec`：PyInstaller 打包配置。整套应用（`app.py` / `pages/` / `modules/` / `analytics/` / `.streamlit/`）作为**数据文件**随包分发、运行时从同目录加载，因此冻结时无需解析可选重型依赖。
+- **不包含** `jobspy` / `playwright` / `tls_client` / `ollama`（它们均为函数内懒加载的可选功能，缺失时仅对应的高级抓取 / 本地模型不可用，核心功能不受影响）。
+- 安装目录默认 `%LOCALAPPDATA%\jobhunter`，用户数据在其中的 `data\`。卸载会连同 `data\` 一起删除，**重装前请先备份该目录**。
+
+### 隐私说明
+
+- 安装包**不含任何密钥**：随包分发的是 `config.example.yaml`（无 key），首次运行自动生成 `config.yaml`；你的 DeepSeek Key 请在「⚙️ 配置」页填写（或自行编辑 `config.yaml`）。
+- 本地数据全程不出本机；仅当启用 AI 功能（推荐 / 求职信）时，简历文本会发往 DeepSeek。
