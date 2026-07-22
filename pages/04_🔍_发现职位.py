@@ -100,7 +100,8 @@ def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list
 from modules.auth import require_auth
 require_auth()
 
-st.title("🔍 发现职位")
+st.title("🔍 发现 / 导入岗位")
+st.caption("采集岗位到此，作为「🌊 海投」的岗位池（也可在精投里手动贴 JD）。")
 
 if not st.session_state.get("resume_parsed"):
     st.info("👋 请先在 ⚙️ 配置页面上传简历，然后回到这里开始职业定位")
@@ -753,4 +754,4 @@ if st.session_state.all_jobs:
     st.info("👆 岗位已自动进入「📊 审核挑选」页面。点击左侧导航栏进入，按公司名查看、按过筛概率筛选。")
 
     if st.button("🚀 前往审核挑选页面", use_container_width=True, type="primary"):
-        st.switch_page("pages/03_📊_审核挑选.py")
+        st.switch_page("pages/05_📊_审核挑选.py")

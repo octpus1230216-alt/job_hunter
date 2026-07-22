@@ -16,6 +16,7 @@ from modules.auth import require_auth
 require_auth()
 
 st.title("📊 审核挑选")
+st.caption("组件页：对「发现职位」采集到的岗位逐个过审、挑选，供「生成简历」使用。")
 
 # ============================================================
 # 收集待审核岗位（来自发现页的 all_jobs）
@@ -238,4 +239,4 @@ if selected:
     if st.button("🚀 确认选择，去生成简历", use_container_width=True, type="primary"):
         st.session_state.selected_jobs = selected
         st.success(f"已选择 {len(selected)} 个岗位，请前往「✨ 生成简历」页面")
-        st.switch_page("pages/04_✨_生成简历.py")
+        st.switch_page("pages/06_✨_生成简历.py")
