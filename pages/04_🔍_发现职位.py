@@ -86,7 +86,7 @@ def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list
         match = matcher.match_single(resume, job)
         tag = _classify_industry(job, report)
         results.append({**job, "_match": match, "_industry_tag": tag})
-    results.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+    results.sort(key=lambda x: (x.get("company", "") or "").lower())
     return results
 
 
@@ -100,7 +100,8 @@ def _match_jobs(jobs_df, resume, llm_client, report, max_jobs: int = 30) -> list
 from modules.auth import require_auth
 require_auth()
 
-st.title("🔍 发现职位")
+st.title("🔍 发现 / 导入岗位")
+st.caption("采集岗位到此，作为「🌊 海投」的岗位池（也可在精投里手动贴 JD）。")
 
 if not st.session_state.get("resume_parsed"):
     st.info("👋 请先在 ⚙️ 配置页面上传简历，然后回到这里开始职业定位")
@@ -184,8 +185,7 @@ if _latest_digest:
 
         top20 = digest.get("top_20", [])[:5]
         for i, job in enumerate(top20):
-            score = job.get("_match_score", "?")
-            st.markdown(f"**#{i+1} [{score}分] {job.get('company', '?')}** — {job.get('title', '?')}")
+            st.markdown(f"**#{i+1} {job.get('company', '?')}** — {job.get('title', '?')}")
 
         st.markdown("---")
         st.caption("💡 手动运行 `python daily_digest.py` 生成今日精选")
@@ -372,7 +372,7 @@ with tab1:
                             combined = combined.drop_duplicates(subset=["job_url"], keep="first")
                             st.session_state.jobs_df = combined
 
-                            st.write("🧠 正在计算匹配度...")
+                            st.write("🧠 正在分析岗位匹配...")
                             new_jobs = _match_jobs(combined, st.session_state.resume_parsed,
                                                   st.session_state.llm_client,
                                                   report)
@@ -546,7 +546,7 @@ with tab2:
                                         st.session_state.all_jobs.insert(0, {
                                             **jd_parsed, "_match": match, "_industry_tag": tag
                                         })
-                                        st.success(f"已导入！匹配度: {match.get('overall_score', 0)}")
+                                        st.success("已导入，已加入审核列表！")
                                         st.rerun()
     except Exception:
         pass
@@ -610,7 +610,7 @@ with tab3:
 
                     if all_found:
                         # 匹配
-                        st.write("🧠 正在计算匹配度...")
+                        st.write("🧠 正在分析岗位匹配...")
                         matched = []
                         for job in all_found[:30]:
                             match = _match_single_job(job, st.session_state.resume_parsed,
@@ -618,7 +618,7 @@ with tab3:
                             tag = _classify_industry(job, report)
                             matched.append({**job, "_match": match, "_industry_tag": tag})
 
-                        matched.sort(key=lambda x: x.get("_match", {}).get("overall_score", 0), reverse=True)
+                        matched.sort(key=lambda x: (x.get("company", "") or "").lower())
                         st.session_state.all_jobs = matched + st.session_state.all_jobs
 
                         status.update(label=f"搜索完成！找到 {len(all_found)} 个职位", state="complete")
@@ -668,7 +668,7 @@ with tab4:
                     jd_parsed["discovered_at"] = datetime.now().isoformat()
 
                     # 匹配
-                    st.write("🧠 计算匹配度...")
+                    st.write("🧠 正在分析岗位匹配...")
                     from modules.matcher import JobMatcher
                     matcher = JobMatcher(llm)
                     match = matcher.match_single(
@@ -687,8 +687,7 @@ with tab4:
                         st.session_state.all_jobs.insert(0, job_entry)
 
                     status.update(label="解析完成", state="complete")
-                    st.success(f"匹配度: {match.get('overall_score', 0)}/100 | 标签: {industry_tag}")
-                    st.json(match)
+                    st.success(f"已解析！行业标签：{industry_tag}")
 
                 except Exception as e:
                     status.update(label="解析失败", state="error")
@@ -752,7 +751,7 @@ if st.session_state.all_jobs:
     with col_b:
         st.metric("已选择岗位", already_selected)
 
-    st.info("👆 岗位已自动进入「📊 审核挑选」页面。点击左侧导航栏进入，按匹配度排序、筛选行业标签。")
+    st.info("👆 岗位已自动进入「📊 审核挑选」页面。点击左侧导航栏进入，按公司名查看、按过筛概率筛选。")
 
     if st.button("🚀 前往审核挑选页面", use_container_width=True, type="primary"):
-        st.switch_page("pages/03_📊_审核挑选.py")
+        st.switch_page("pages/05_📊_审核挑选.py")

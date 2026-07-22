@@ -10,6 +10,7 @@ from modules.auth import require_auth
 require_auth()
 
 st.title("✨ 生成定制简历")
+st.caption("组件页：为已选岗位生成定制中英文简历 + 求职信（精投 / 海投 也可直接生成）。")
 
 
 def _record_to_tracker(job: dict, resume_path: str = ""):
