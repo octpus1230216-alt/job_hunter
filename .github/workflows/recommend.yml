@@ -1,0 +1,48 @@
+name: 每日岗位推荐
+
+on:
+  schedule:
+    # 北京时间每天 08:00 = UTC 00:00
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  recommend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          # recommender 对 jobspy/LLM 为可选依赖，缺失也能跑
+          pip install pyyaml || true
+
+      - name: 生成每日推荐
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python recommender_run.py
+
+      - name: 提交 latest.json 回仓库
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # data/recommendations/ 在 .gitignore 中被忽略以保护本地隐私；
+          # 此处用 -f 强制加入，使 Actions 能回写每日推荐到仓库。
+          git add -f data/recommendations/ || true
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+          else
+            git commit -m "chore: 每日岗位推荐更新 $(date +%F)"
+            git push
+          fi

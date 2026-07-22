@@ -171,8 +171,13 @@ if gaps:
 st.markdown("---")
 st.subheader("③ 生成定制简历 & 求职信")
 
-bilingual = st.toggle("中英双语", value=bilingual_default,
-                      help="开启后同时生成中英文简历与求职信")
+col_tg1, col_tg2 = st.columns(2)
+with col_tg1:
+    bilingual = st.toggle("中英双语", value=bilingual_default,
+                          help="开启后同时生成中英文简历与求职信")
+with col_tg2:
+    gen_cl = st.toggle("同时生成求职信", value=True,
+                       help="关闭则只生成定制简历（意见 E-2）")
 
 if st.button("🎨 生成定制简历 + 求职信", use_container_width=True, type="primary"):
     if not st.session_state.get("llm_client"):
@@ -185,7 +190,8 @@ if st.button("🎨 生成定制简历 + 求职信", use_container_width=True, ty
         generator = ResumeGenerator(llm, analyzer)
         with st.status("正在为这个岗位定制…", expanded=True) as status:
             status.write("🎨 分析公司风格…")
-            result = generator.generate_all(resume, job, bilingual=bilingual)
+            result = generator.generate_all(resume, job, bilingual=bilingual,
+                                            generate_cover_letter=gen_cl)
             st.session_state.jingtou_result = result
             status.update(label="生成完成！", state="complete")
         st.rerun()
@@ -212,8 +218,8 @@ if result:
             st.markdown(f"**Subject (EN)**：{cl.get('subject_en', '')}")
             st.markdown(cl.get("body_en", "")[:300] + "…")
 
-    st.markdown("### 📁 下载文件")
-    dl_cols = st.columns(len(files) + 1)
+    st.markdown("### 📁 下载文件（HTML）")
+    dl_cols = st.columns(len(files))
     ci = 0
     for lang, fpath in files.items():
         lang_label = "中文" if lang == "zh" else "英文" if lang == "en" else lang
@@ -224,13 +230,41 @@ if result:
                                file_name=Path(fpath).name, mime="text/html",
                                key=f"jt_dl_{lang}")
         ci += 1
-    with dl_cols[ci]:
-        cl_file = result.get("cover_letter_file", "")
-        if cl_file and Path(cl_file).exists():
-            with open(cl_file, "r", encoding="utf-8") as f:
-                cl_content = f.read()
-            st.download_button("⬇️ 求职信", cl_content,
-                               file_name=Path(cl_file).name, key="jt_dl_cl")
+
+    # Word(.docx) 导出（意见 E-3）
+    st.markdown("### 💾 导出 Word（.docx）")
+    cl = result.get("cover_letter", {})
+    n_docx = 2 + (1 if (cl and not cl.get("error")) else 0)
+    docx_cols = st.columns(n_docx)
+    di = 0
+    for lang in (["zh", "en"] if bilingual else ["default"]):
+        lang_label = "中文" if lang == "zh" else "英文" if lang == "en" else "默认"
+        with docx_cols[di]:
+            if st.button(f"📄 生成简历 Word({lang_label})", key=f"jt_docx_{lang}"):
+                try:
+                    from modules.docx_export import export_resume_docx
+                    p = export_resume_docx(customized, job, lang=lang)
+                    with open(p, "rb") as f:
+                        st.download_button(f"⬇️ 下载 简历({lang_label}).docx",
+                                           data=f.read(), file_name=p.name,
+                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                           key=f"jt_docx_dl_{lang}")
+                except Exception as e:
+                    st.error(str(e)[:200])
+        di += 1
+    if cl and not cl.get("error") and result.get("cover_letter_file"):
+        with docx_cols[di]:
+            if st.button("📄 生成求职信 Word", key="jt_docx_cl"):
+                try:
+                    from modules.docx_export import export_cover_letter_docx
+                    p = export_cover_letter_docx(cl, job)
+                    with open(p, "rb") as f:
+                        st.download_button("⬇️ 下载 求职信.docx", data=f.read(),
+                                           file_name=p.name,
+                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                           key="jt_docx_cl_dl")
+                except Exception as e:
+                    st.error(str(e)[:200])
 
     # 投递速查卡
     qc = result.get("quick_card", {})

@@ -21,6 +21,28 @@ require_auth()
 
 st.title("⚙️ 配置")
 
+# ---- 首次运行：选择个人信息存放位置（意见 G-6）----
+from modules.profile_store import get_profile_store, save_profile_config, load_profile_config
+_profile_cfg = load_profile_config()
+if _profile_cfg is None:
+    with st.container(border=True):
+        st.info("👋 首次运行：请选择「个人信息（简历等）」的存放位置。选好后后续打开会自动加载，无需重复上传。")
+        _backend = st.radio(
+            "存储方式",
+            ["本地文件夹（推荐）", "云端同步（预留，暂未开放）"],
+            help="本地：存在本机目录；云端：预留接口，后续可接对象存储。",
+        )
+        _default_root = str(get_profile_store().root)
+        _root = st.text_input(
+            "存放目录", value=_default_root,
+            help="默认 data/profile/，可改为任意本机路径",
+        )
+        if st.button("✅ 确认并开始使用", type="primary"):
+            _b = "cloud" if _backend.startswith("云端") else "local"
+            save_profile_config(_root, _b)
+            st.success(f"已保存存放位置：{_root}")
+            st.rerun()
+
 tab1, tab2, tab3, tab4 = st.tabs(["📄 简历", "🤖 API 设置", "🎯 求职偏好", "🌐 语言设置"])
 
 # ============================================================
@@ -30,9 +52,9 @@ with tab1:
     st.subheader("上传主简历")
     st.caption("上传你的主简历（PDF/DOCX/TXT），AI会自动解析并用于后续匹配和定制")
 
-    # 固定个人信息文件夹：简历与解析结果持久化到 data/profile/，刷新后自动加载（缺失也不影响网站启动）
-    profile_dir = Path(__file__).parent.parent / "data" / "profile"
-    profile_dir.mkdir(parents=True, exist_ok=True)
+    # 固定个人信息文件夹：简历与解析结果持久化到用户选择的目录（默认 data/profile/），刷新后自动加载
+    store = get_profile_store()
+    profile_dir = store.root
     _parsed_cache = profile_dir / "resume_parsed.json"
     if not st.session_state.get("resume_parsed") and _parsed_cache.exists():
         try:
