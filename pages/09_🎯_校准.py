@@ -16,7 +16,7 @@ import streamlit as st
 import pandas as pd
 import statistics
 
-from modules.store import (
+from analytics.modules.store import (
     DEFAULT_DB, COMPETITION_FACTOR, init_db, competition_breakdown,
     suggest_competition_factor, load_competition_overrides, save_competition_overrides,
     get_all,
