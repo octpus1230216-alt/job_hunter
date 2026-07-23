@@ -1,3 +1,4 @@
+Unicode True
 !include "MUI2.nsh"
 
 ; ---- 基本信息 ----
