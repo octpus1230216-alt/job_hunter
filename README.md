@@ -90,5 +90,35 @@ analytics/                  # 校准与统计（SQLite）
 pip install streamlit pyyaml python-docx   # 核心：python-docx 用于 Word 导出
 pip install jobspy                         # 可选：抓取最新岗位（缺失不影响运行）
 ```
-
 > `requirements.txt` 已包含上述依赖；jobspy 为可选，安装失败不影响其它功能。
+
+---
+
+## 桌面安装包（Windows）
+
+把整套应用冻结成**单机可执行程序**：双击启动器即在本地起一个 Streamlit 服务并自动打开浏览器，所有个人数据（简历 / 画像 / 投递记录）默认只存在本机安装目录，不出本机。
+
+### 两种获取方式
+
+1. **GitHub Actions 自动产出（推荐，零本地环境）**
+   - 仓库 **Actions → Build Desktop Installer → Run workflow**（手动触发）；
+   - 或给仓库打 `v*` 标签（如 `v1.0.0`），自动构建并作为 Release 附件发布。
+   - 产物：`job_hunter-setup.exe`（在 Artifacts / Releases 下载）。
+
+2. **本地一键构建**（需本机有 Python 3.11 + [NSIS](https://nsis.sourceforge.io/Download)）
+   ```bat
+   packaging\build.bat
+   ```
+   产物同样在 `dist\job_hunter-setup.exe`。
+
+### 原理与边界
+
+- `desktop/launcher.py`：冻结后的入口，负责拷贝默认配置、找空闲端口、以 headless 方式 `streamlit run app.py`、打开浏览器、并提供"关闭即退出"的小窗口。
+- `packaging/desktop.spec`：PyInstaller 打包配置。整套应用（`app.py` / `pages/` / `modules/` / `analytics/` / `.streamlit/`）作为**数据文件**随包分发、运行时从同目录加载，因此冻结时无需解析可选重型依赖。
+- **不包含** `jobspy` / `playwright` / `tls_client` / `ollama`（它们均为函数内懒加载的可选功能，缺失时仅对应的高级抓取 / 本地模型不可用，核心功能不受影响）。
+- 安装目录默认 `%LOCALAPPDATA%\jobhunter`，用户数据在其中的 `data\`。卸载会连同 `data\` 一起删除，**重装前请先备份该目录**。
+
+### 隐私说明
+
+- 安装包**不含任何密钥**：随包分发的是 `config.example.yaml`（无 key），首次运行自动生成 `config.yaml`；你的 DeepSeek Key 请在「⚙️ 配置」页填写（或自行编辑 `config.yaml`）。
+- 本地数据全程不出本机；仅当启用 AI 功能（推荐 / 求职信）时，简历文本会发往 DeepSeek。
