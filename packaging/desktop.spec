@@ -130,14 +130,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="job_hunter",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # UPX not available on most CI runners; skip to avoid failure
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -145,4 +144,13 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="job_hunter",
 )
