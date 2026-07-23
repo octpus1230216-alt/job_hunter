@@ -10,8 +10,18 @@ lazy-loaded inside functions and simply unavailable in the desktop build.
 import os
 from PyInstaller.utils.hooks import collect_all
 
-SPECPATH_DIR = os.path.dirname(os.path.abspath(SPECPATH))
-APP_ROOT = os.path.abspath(os.path.join(SPECPATH_DIR, ".."))  # repo root
+# Robustly locate repo root by walking UP from the spec file itself
+# until we find app.py. Works regardless of CWD / checkout depth.
+_spec_file = os.path.abspath(SPECPATH)
+_walk = os.path.dirname(_spec_file)
+APP_ROOT = None
+while _walk and _walk != os.path.dirname(_walk):
+    if os.path.isfile(os.path.join(_walk, "app.py")):
+        APP_ROOT = _walk
+        break
+    _walk = os.path.dirname(_walk)
+if APP_ROOT is None:
+    APP_ROOT = os.getcwd()  # last resort
 
 block_cipher = None
 
@@ -127,7 +137,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # UPX not available on most CI runners; skip to avoid failure
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
