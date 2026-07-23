@@ -30,8 +30,35 @@ jobs:
       - name: Build with PyInstaller
         run: python -m PyInstaller packaging/desktop.spec --noconfirm --clean
 
+      - name: Debug: check environment
+        run: |
+          echo "=== makensis version ==="
+          makensis /VERSION
+          echo "=== CMD version ==="
+          ver
+          echo "=== dist contents ==="
+          dir /s /b dist 2>&1 || echo "dist not found"
+          echo "=== dist/job_hunter contents ==="
+          dir /s /b dist\job_hunter 2>&1 || echo "dist/job_hunter not found"
+          echo "=== CWD ==="
+          cd
+          echo "=== packaging/installer.nsi exists ==="
+          if exist packaging\installer.nsi (echo YES) else (echo NO)
+          echo "=== installer.nsi first 5 lines ==="
+          powershell -Command "Get-Content packaging\installer.nsi -TotalCount 5"
+
       - name: Build NSIS installer
-        run: makensis -V2 packaging/installer.nsi
+        run: |
+          makensis -V2 packaging/installer.nsi > nsis-build.log 2>&1
+          echo "NSIS exit code: %ERRORLEVEL%"
+          type nsis-build.log
+
+      - name: Upload NSIS build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsis-debug-log
+          path: nsis-build.log
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
