@@ -10,8 +10,11 @@ lazy-loaded inside functions and simply unavailable in the desktop build.
 import os
 from PyInstaller.utils.hooks import collect_all
 
-SPECPATH_DIR = os.path.dirname(os.path.abspath(SPECPATH))
-APP_ROOT = os.path.abspath(os.path.join(SPECPATH_DIR, ".."))  # repo root
+# Robustly locate repo root: prefer SPECPATH-based (local dev),
+# fall back to cwd (CI where checkout depth may differ).
+_spec_dir = os.path.dirname(os.path.abspath(SPECPATH))
+_candidate = os.path.abspath(os.path.join(_spec_dir, ".."))
+APP_ROOT = _candidate if os.path.isfile(os.path.join(_candidate, "app.py")) else os.getcwd()
 
 block_cipher = None
 
@@ -127,7 +130,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # UPX not available on most CI runners; skip to avoid failure
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
