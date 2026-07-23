@@ -30,9 +30,6 @@ jobs:
       - name: Build with PyInstaller
         run: python -m PyInstaller packaging/desktop.spec --noconfirm --clean
 
-      - name: List dist directory
-        run: dir /s /b dist
-
       - name: Build NSIS installer
         run: makensis -V2 packaging/installer.nsi
 
