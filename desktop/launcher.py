@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import webbrowser
 import threading
+import logging
 
 try:
     import tkinter as tk
@@ -22,9 +23,46 @@ except Exception:
     _HAS_TK = False
 
 
+# ---- Safe logging (sys.stderr may be None in frozen console=False) ----
+_log = logging.getLogger("job_hunter")
+_log.setLevel(logging.DEBUG)
+if sys.stderr is not None:
+    _log.addHandler(logging.StreamHandler(sys.stderr))
+else:
+    # Fallback: log to a file next to the exe when stderr unavailable
+    _log_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "launcher.log")
+    _log.addHandler(logging.FileHandler(_log_file, mode="w", encoding="utf-8"))
+
+
 def app_dir():
-    # Frozen one-folder: this exe sits next to app.py
+    """Return the directory where job_hunter.exe lives."""
     return os.path.dirname(os.path.abspath(sys.argv[0]))
+
+
+def internal_dir():
+    """Return PyInstaller's _internal extraction path (where datas live)."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    return None
+
+
+def find_app_py():
+    """Locate app.py — check exe dir first, then _internal."""
+    base = app_dir()
+    candidates = [
+        os.path.join(base, "app.py"),
+    ]
+    _int = internal_dir()
+    if _int:
+        candidates.append(os.path.join(_int, "app.py"))
+
+    for path in candidates:
+        if os.path.isfile(path):
+            _log.info("Found app.py at: %s", path)
+            return path
+
+    _log.error("app.py not found in: %s", candidates)
+    return None
 
 
 def find_free_port():
@@ -52,15 +90,26 @@ def ensure_config(base):
         example = os.path.join(base, "config.example.yaml")
         if os.path.exists(example):
             shutil.copyfile(example, cfg)
+            _log.info("Created config.yaml from example")
+        else:
+            # Also check _internal for the example
+            _int = internal_dir()
+            if _int:
+                ex2 = os.path.join(_int, "config.example.yaml")
+                if os.path.isfile(ex2):
+                    shutil.copyfile(ex2, cfg)
+                    _log.info("Created config.yaml from _internal/example")
 
 
 def main():
     base = app_dir()
+    _log.info("App dir: %s", base)
+
     ensure_config(base)
 
-    app_py = os.path.join(base, "app.py")
-    if not os.path.exists(app_py):
-        sys.stderr.write("Cannot find app.py next to launcher\n")
+    app_py = find_app_py()
+    if not app_py:
+        show_error("Cannot find app.py.\n\nThe installation may be corrupted.\n\nSee launcher.log for details.")
         return 1
 
     port = find_free_port()
@@ -76,18 +125,24 @@ def main():
         "--browser.gatherUsageStats", "false",
         "--global.developmentMode", "false",
     ]
-    proc = subprocess.Popen(cmd, cwd=base, env=env)
+    _log.info("Launching: %s", " ".join(cmd))
+    proc = subprocess.Popen(cmd, cwd=base, env=env,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     server_up = wait_for_server(port)
     url = "http://127.0.0.1:{}".format(port)
     if server_up:
+        _log.info("Server ready, opening browser: %s", url)
         webbrowser.open(url)
+    else:
+        _log.warning("Server did not start within timeout")
 
     if _HAS_TK:
         root = tk.Tk()
-        root.title("半自动找工作工具")
+        root.title("Job Hunter")
         root.resizable(False, False)
-        msg = "已在浏览器打开：\n{}\n\n关闭此窗口即退出程序。".format(url)
+        msg = ("Browser opened:\n{}\n\n"
+               "Close this window to quit.".format(url))
         tk.Label(root, text=msg, padx=20, pady=20, justify="left").pack()
 
         def on_close():
@@ -114,6 +169,29 @@ def main():
         except KeyboardInterrupt:
             proc.terminate()
     return 0
+
+
+def show_error(message):
+    """Show error dialog — works even without tkinter via MessageBox."""
+    shown = False
+    if _HAS_TK:
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            import tkinter.messagebox
+            tkinter.messagebox.showerror("Job Hunter", message)
+            root.destroy()
+            shown = True
+        except Exception:
+            pass
+    if not shown:
+        # Last resort: write to log file
+        try:
+            log_path = os.path.join(app_dir(), "launcher.log")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write("ERROR: " + message + "\n")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
