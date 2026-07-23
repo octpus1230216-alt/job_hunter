@@ -14,7 +14,8 @@ class ResumeParser:
 
     def __init__(self, data_dir: Path = None):
         if data_dir is None:
-            data_dir = Path(__file__).parent.parent / "data"
+            # 统一存放到 data/profile（与配置页、app 自动加载一致，意见 G-6）
+            data_dir = Path(__file__).parent.parent / "data" / "profile"
         self.data_dir = data_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.parsed_cache = data_dir / "resume_parsed.json"
