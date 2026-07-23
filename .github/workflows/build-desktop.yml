@@ -30,8 +30,19 @@ jobs:
       - name: Build with PyInstaller
         run: python -m PyInstaller packaging/desktop.spec --noconfirm --clean
 
+      - name: Debug: inspect PyInstaller output
+        run: |
+          echo "=== CWD ==="
+          pwd
+          echo "=== dist/ contents ==="
+          if (Test-Path dist) { Get-ChildItem -Recurse dist | Select-Object FullName, Length | Format-Table -AutoSize } else { echo "dist/ NOT FOUND" }
+          echo "=== makensis location ==="
+          Get-Command makensis -ErrorAction SilentlyContinue | Select-Object Source
+          echo "=== NSISDIR ==="
+          echo $env:NSISDIR
+
       - name: Build NSIS installer
-        run: makensis packaging/installer.nsi
+        run: makensis -V2 packaging/installer.nsi
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
