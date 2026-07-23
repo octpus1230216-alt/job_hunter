@@ -1,8 +1,7 @@
-Unicode True
 !include "MUI2.nsh"
 
-; ---- 基本信息 ----
-Name "半自动找工作工具"
+; ---- Basic info ----
+Name "Job Hunter"
 OutFile "dist\job_hunter-setup.exe"
 InstallDir "$LOCALAPPDATA\jobhunter"
 RequestExecutionLevel user
@@ -11,7 +10,7 @@ RequestExecutionLevel user
 !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
 
-; ---- 页面 ----
+; ---- Pages ----
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -22,39 +21,37 @@ RequestExecutionLevel user
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_UNPAGE_FINISH
 
-!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "English"
 
-; ---- 安装段 ----
+; ---- Install section ----
 Section "Install"
   SetOutPath "$INSTDIR"
-  ; PyInstaller 输出在 dist\job_hunter\，整体复制
+  ; PyInstaller outputs to dist\job_hunter\ as one-folder mode
   File /r "dist\job_hunter\*.*"
 
-  ; 开始菜单
-  CreateDirectory "$SMPROGRAMS\半自动找工作工具"
-  CreateShortCut "$SMPROGRAMS\半自动找工作工具\半自动找工作工具.lnk" "$INSTDIR\job_hunter.exe"
-  CreateShortCut "$SMPROGRAMS\半自动找工作工具\卸载.lnk" "$INSTDIR\uninstall.exe"
+  ; Start menu shortcuts
+  CreateDirectory "$SMPROGRAMS\JobHunter"
+  CreateShortCut "$SMPROGRAMS\JobHunter\JobHunter.lnk" "$INSTDIR\job_hunter.exe"
+  CreateShortCut "$SMPROGRAMS\JobHunter\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
-  ; 桌面快捷方式
-  CreateShortCut "$DESKTOP\半自动找工作工具.lnk" "$INSTDIR\job_hunter.exe"
+  ; Desktop shortcut
+  CreateShortCut "$DESKTOP\JobHunter.lnk" "$INSTDIR\job_hunter.exe"
 
-  ; 卸载信息
+  ; Uninstaller info
   WriteUninstaller "$INSTDIR\uninstall.exe"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "DisplayName" "半自动找工作工具"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "DisplayName" "Job Hunter"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "DisplayIcon" "$INSTDIR\job_hunter.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter" "Publisher" "job_hunter"
 SectionEnd
 
-; ---- 卸载段 ----
+; ---- Uninstall section ----
 Section "Uninstall"
-  Delete "$SMPROGRAMS\半自动找工作工具\半自动找工作工具.lnk"
-  Delete "$SMPROGRAMS\半自动找工作工具\卸载.lnk"
-  RMDir "$SMPROGRAMS\半自动找工作工具"
-  Delete "$DESKTOP\半自动找工作工具.lnk"
-  ; 注意：默认会把安装目录（含用户数据 data\）一并删除。
-  ; 若想保留简历/投递记录，卸载前请先备份 $LOCALAPPDATA\jobhunter\data
+  Delete "$SMPROGRAMS\JobHunter\JobHunter.lnk"
+  Delete "$SMPROGRAMS\JobHunter\Uninstall.lnk"
+  RMDir "$SMPROGRAMS\JobHunter"
+  Delete "$DESKTOP\JobHunter.lnk"
   RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\jobhunter"
 SectionEnd
