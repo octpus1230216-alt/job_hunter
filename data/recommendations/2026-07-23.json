@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-07-23T02:28:00",
+  "count": 15,
+  "region_filter": [],
+  "items": [
+    {
+      "company": "Apple",
+      "title": "ML Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://www.apple.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Microsoft",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://careers.microsoft.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "ByteDance",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "CN",
+      "url": "https://jobs.bytedance.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Salesforce",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.salesforce.com/company/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Stripe",
+      "title": "Backend Engineer",
+      "industry": "金融科技",
+      "region": "US",
+      "url": "https://stripe.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（金融科技），值得保持关注"
+    },
+    {
+      "company": "OpenAI",
+      "title": "ML Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://openai.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "NVIDIA",
+      "title": "Deep Learning Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.nvidia.com/en-us/about-nvidia/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Tesla",
+      "title": "Firmware Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://www.tesla.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Huawei",
+      "title": "Software Engineer",
+      "industry": "硬件",
+      "region": "CN",
+      "url": "https://careers.huawei.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "IBM",
+      "title": "Consultant",
+      "industry": "咨询",
+      "region": "US",
+      "url": "https://www.ibm.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（咨询），值得保持关注"
+    },
+    {
+      "company": "Anthropic",
+      "title": "ML Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.anthropic.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Oracle",
+      "title": "Database Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.oracle.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Airbnb",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://careers.airbnb.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Spotify",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "SE",
+      "url": "https://www.lifeatspotify.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Snap",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://careers.snap.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    }
+  ]
+}
