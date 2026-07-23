@@ -26,28 +26,31 @@ if APP_ROOT is None:
 block_cipher = None
 
 # ---- data files bundled alongside the frozen launcher ----
+# All app sources go under "app_src/" inside _internal to avoid
+# PyInstaller creating spurious directories for single-file entries.
 datas = []
+_APP_SRC = "app_src"
 entries = [
-    "app.py",
-    "pages",
-    "modules",
-    "analytics",
-    "recommender_run.py",
-    "README.md",
-    "requirements.txt",
-    ".streamlit",
+    ("app.py", "app.py"),
+    ("pages", "pages"),
+    ("modules", "modules"),
+    ("analytics", "analytics"),
+    ("recommender_run.py", "recommender_run.py"),
+    ("README.md", "README.md"),
+    ("requirements.txt", "requirements.txt"),
+    (".streamlit", ".streamlit"),
 ]
-for e in entries:
-    src = os.path.join(APP_ROOT, e)
+for src_name, dst_name in entries:
+    src = os.path.join(APP_ROOT, src_name)
     if os.path.isdir(src):
-        datas.append((src, e))
+        datas.append((src, os.path.join(_APP_SRC, dst_name)))
     elif os.path.isfile(src):
-        datas.append((src, e))
+        datas.append((src, os.path.join(_APP_SRC, dst_name)))
 
 # config.yaml is gitignored (may contain a real key); ship the key-free example instead.
 example_cfg = os.path.join(APP_ROOT, "config.example.yaml")
 if os.path.isfile(example_cfg):
-    datas.append((example_cfg, "config.yaml"))
+    datas.append((example_cfg, os.path.join(_APP_SRC, "config.yaml")))
 
 # ---- Streamlit's static frontend assets MUST be bundled ----
 try:

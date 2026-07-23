@@ -46,22 +46,56 @@ def internal_dir():
     return None
 
 
+def _find_file_recursive(base, filename, max_depth=3):
+    """Search for filename under base, handling PyInstaller's dir-wrapping.
+
+    PyInstaller one-folder mode wraps each single-file data entry in a
+    directory of the same name: e.g. datas ("app.py", "app.py") creates
+    _internal/app_src/app.py/app.py.  Walk up to max_depth levels.
+    """
+    if os.path.isfile(os.path.join(base, filename)):
+        return os.path.join(base, filename)
+    # Check the PyInstaller-wrapped pattern: <dirname>/<filename>/<filename>
+    wrapped = os.path.join(base, filename, filename)
+    if os.path.isfile(wrapped):
+        return wrapped
+    # Broader search
+    for root, dirs, files in os.walk(base):
+        depth = root[len(base):].count(os.sep)
+        if depth > max_depth:
+            continue
+        if filename in files:
+            found = os.path.join(root, filename)
+            _log.debug("walk-found %s at %s", filename, found)
+            return found
+    return None
+
+
 def find_app_py():
-    """Locate app.py — check exe dir first, then _internal."""
+    """Locate app.py — check exe dir first, then _internal/app_src/."""
     base = app_dir()
-    candidates = [
-        os.path.join(base, "app.py"),
-    ]
+    # 1. Next to the exe (unlikely for frozen builds but cheap to check)
+    result = _find_file_recursive(base, "app.py")
+    if result:
+        _log.info("Found app.py at: %s", result)
+        return result
+
+    # 2. Inside PyInstaller _MEIPASS extraction dir
     _int = internal_dir()
     if _int:
-        candidates.append(os.path.join(_int, "app.py"))
+        app_src = os.path.join(_int, "app_src")
+        if os.path.isdir(app_src):
+            result = _find_file_recursive(app_src, "app.py")
+            if result:
+                _log.info("Found app.py at: %s", result)
+                return result
+        # Fallback: anywhere in _internal
+        result = _find_file_recursive(_int, "app.py")
+        if result:
+            _log.info("Found app.py at: %s (fallback)", result)
+            return result
 
-    for path in candidates:
-        if os.path.isfile(path):
-            _log.info("Found app.py at: %s", path)
-            return path
-
-    _log.error("app.py not found in: %s", candidates)
+    _log.error("app.py not found")
     return None
 
 
@@ -92,13 +126,15 @@ def ensure_config(base):
             shutil.copyfile(example, cfg)
             _log.info("Created config.yaml from example")
         else:
-            # Also check _internal for the example
+            # Also check _internal/app_src/ for the example
             _int = internal_dir()
             if _int:
-                ex2 = os.path.join(_int, "config.example.yaml")
-                if os.path.isfile(ex2):
-                    shutil.copyfile(ex2, cfg)
-                    _log.info("Created config.yaml from _internal/example")
+                for search_dir in [os.path.join(_int, "app_src"), _int]:
+                    ex2 = os.path.join(search_dir, "config.example.yaml")
+                    if os.path.isfile(ex2):
+                        shutil.copyfile(ex2, cfg)
+                        _log.info("Created config.yaml from %s", ex2)
+                        break
 
 
 def main():
