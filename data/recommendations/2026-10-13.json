@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-10-13T05:20:43",
+  "count": 15,
+  "region_filter": [],
+  "items": [
+    {
+      "company": "Anthropic",
+      "title": "ML Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.anthropic.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Huawei",
+      "title": "Software Engineer",
+      "industry": "硬件",
+      "region": "CN",
+      "url": "https://careers.huawei.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Tesla",
+      "title": "Firmware Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://www.tesla.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Salesforce",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.salesforce.com/company/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Apple",
+      "title": "ML Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://www.apple.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Meta",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.metacareers.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Uber",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.uber.com/us/en/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "NVIDIA",
+      "title": "Deep Learning Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.nvidia.com/en-us/about-nvidia/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Baidu",
+      "title": "Algorithm Engineer",
+      "industry": "AI",
+      "region": "CN",
+      "url": "https://talent.baidu.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Stripe",
+      "title": "Backend Engineer",
+      "industry": "金融科技",
+      "region": "US",
+      "url": "https://stripe.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（金融科技），值得保持关注"
+    },
+    {
+      "company": "IBM",
+      "title": "Consultant",
+      "industry": "咨询",
+      "region": "US",
+      "url": "https://www.ibm.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（咨询），值得保持关注"
+    },
+    {
+      "company": "Netflix",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://explore.jobs.netflix.net",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Google",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://careers.google.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Alibaba",
+      "title": "Java Engineer",
+      "industry": "互联网",
+      "region": "CN",
+      "url": "https://talent.alibaba.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Intel",
+      "title": "Hardware Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://www.intel.com/content/www/us/en/jobs.html",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    }
+  ]
+}
