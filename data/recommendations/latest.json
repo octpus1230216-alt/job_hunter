@@ -1,8 +1,19 @@
 {
-  "generated_at": "2026-10-22T03:10:44",
+  "generated_at": "2026-10-23T03:16:36",
   "count": 15,
   "region_filter": [],
   "items": [
+    {
+      "company": "OpenAI",
+      "title": "ML Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://openai.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
     {
       "company": "Amazon",
       "title": "SDE",
@@ -15,33 +26,77 @@
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Netflix",
-      "title": "Software Engineer",
-      "industry": "互联网",
-      "region": "US",
-      "url": "https://explore.jobs.netflix.net",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（互联网），值得保持关注"
-    },
-    {
-      "company": "Meituan",
+      "company": "Tencent",
       "title": "Backend Engineer",
       "industry": "互联网",
       "region": "CN",
-      "url": "https://zhaopin.meituan.com",
+      "url": "https://careers.tencent.com",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Intel",
-      "title": "Hardware Engineer",
+      "company": "Databricks",
+      "title": "Software Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.databricks.com/company/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Baidu",
+      "title": "Algorithm Engineer",
+      "industry": "AI",
+      "region": "CN",
+      "url": "https://talent.baidu.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "ByteDance",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "CN",
+      "url": "https://jobs.bytedance.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Tesla",
+      "title": "Firmware Engineer",
       "industry": "硬件",
       "region": "US",
-      "url": "https://www.intel.com/content/www/us/en/jobs.html",
+      "url": "https://www.tesla.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
+      "company": "Stripe",
+      "title": "Backend Engineer",
+      "industry": "金融科技",
+      "region": "US",
+      "url": "https://stripe.com/jobs",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（金融科技），值得保持关注"
+    },
+    {
+      "company": "AMD",
+      "title": "Silicon Engineer",
+      "industry": "硬件",
+      "region": "US",
+      "url": "https://careers.amd.com",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
@@ -59,61 +114,6 @@
       "why": "世界知名企业（硬件），值得保持关注"
     },
     {
-      "company": "Tesla",
-      "title": "Firmware Engineer",
-      "industry": "硬件",
-      "region": "US",
-      "url": "https://www.tesla.com/careers",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（硬件），值得保持关注"
-    },
-    {
-      "company": "Baidu",
-      "title": "Algorithm Engineer",
-      "industry": "AI",
-      "region": "CN",
-      "url": "https://talent.baidu.com",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（AI），值得保持关注"
-    },
-    {
-      "company": "NVIDIA",
-      "title": "Deep Learning Engineer",
-      "industry": "AI",
-      "region": "US",
-      "url": "https://www.nvidia.com/en-us/about-nvidia/careers",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（AI），值得保持关注"
-    },
-    {
-      "company": "Stripe",
-      "title": "Backend Engineer",
-      "industry": "金融科技",
-      "region": "US",
-      "url": "https://stripe.com/jobs",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（金融科技），值得保持关注"
-    },
-    {
-      "company": "Anthropic",
-      "title": "ML Engineer",
-      "industry": "AI",
-      "region": "US",
-      "url": "https://www.anthropic.com/jobs",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（AI），值得保持关注"
-    },
-    {
       "company": "IBM",
       "title": "Consultant",
       "industry": "咨询",
@@ -123,28 +123,6 @@
       "source": "world-known",
       "related_score": 0.0,
       "why": "世界知名企业（咨询），值得保持关注"
-    },
-    {
-      "company": "Microsoft",
-      "title": "Software Engineer",
-      "industry": "互联网",
-      "region": "US",
-      "url": "https://careers.microsoft.com",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（互联网），值得保持关注"
-    },
-    {
-      "company": "Oracle",
-      "title": "Database Engineer",
-      "industry": "互联网",
-      "region": "US",
-      "url": "https://www.oracle.com/careers",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（互联网），值得保持关注"
     },
     {
       "company": "Spotify",
@@ -158,11 +136,33 @@
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Uber",
+      "company": "Alibaba",
+      "title": "Java Engineer",
+      "industry": "互联网",
+      "region": "CN",
+      "url": "https://talent.alibaba.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Salesforce",
       "title": "Software Engineer",
       "industry": "互联网",
       "region": "US",
-      "url": "https://www.uber.com/us/en/careers",
+      "url": "https://www.salesforce.com/company/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Oracle",
+      "title": "Database Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.oracle.com/careers",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
