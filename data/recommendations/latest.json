@@ -1,52 +1,8 @@
 {
-  "generated_at": "2026-11-18T05:48:47",
+  "generated_at": "2026-11-19T05:48:08",
   "count": 15,
   "region_filter": [],
   "items": [
-    {
-      "company": "Tencent",
-      "title": "Backend Engineer",
-      "industry": "互联网",
-      "region": "CN",
-      "url": "https://careers.tencent.com",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（互联网），值得保持关注"
-    },
-    {
-      "company": "Amazon",
-      "title": "SDE",
-      "industry": "互联网",
-      "region": "US",
-      "url": "https://www.amazon.jobs",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（互联网），值得保持关注"
-    },
-    {
-      "company": "Huawei",
-      "title": "Software Engineer",
-      "industry": "硬件",
-      "region": "CN",
-      "url": "https://careers.huawei.com",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（硬件），值得保持关注"
-    },
-    {
-      "company": "AMD",
-      "title": "Silicon Engineer",
-      "industry": "硬件",
-      "region": "US",
-      "url": "https://careers.amd.com",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（硬件），值得保持关注"
-    },
     {
       "company": "Snap",
       "title": "Software Engineer",
@@ -59,15 +15,37 @@
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Anthropic",
-      "title": "ML Engineer",
-      "industry": "AI",
+      "company": "LinkedIn",
+      "title": "Software Engineer",
+      "industry": "互联网",
       "region": "US",
-      "url": "https://www.anthropic.com/jobs",
+      "url": "https://careers.linkedin.com",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
-      "why": "世界知名企业（AI），值得保持关注"
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Uber",
+      "title": "Software Engineer",
+      "industry": "互联网",
+      "region": "US",
+      "url": "https://www.uber.com/us/en/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（互联网），值得保持关注"
+    },
+    {
+      "company": "Xiaomi",
+      "title": "Embedded Engineer",
+      "industry": "硬件",
+      "region": "CN",
+      "url": "https://hr.xiaomi.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
     },
     {
       "company": "Databricks",
@@ -81,6 +59,28 @@
       "why": "世界知名企业（AI），值得保持关注"
     },
     {
+      "company": "NVIDIA",
+      "title": "Deep Learning Engineer",
+      "industry": "AI",
+      "region": "US",
+      "url": "https://www.nvidia.com/en-us/about-nvidia/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（AI），值得保持关注"
+    },
+    {
+      "company": "Huawei",
+      "title": "Software Engineer",
+      "industry": "硬件",
+      "region": "CN",
+      "url": "https://careers.huawei.com",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（硬件），值得保持关注"
+    },
+    {
       "company": "Baidu",
       "title": "Algorithm Engineer",
       "industry": "AI",
@@ -92,26 +92,15 @@
       "why": "世界知名企业（AI），值得保持关注"
     },
     {
-      "company": "Tesla",
-      "title": "Firmware Engineer",
+      "company": "Apple",
+      "title": "ML Engineer",
       "industry": "硬件",
       "region": "US",
-      "url": "https://www.tesla.com/careers",
+      "url": "https://www.apple.com/careers",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
       "why": "世界知名企业（硬件），值得保持关注"
-    },
-    {
-      "company": "IBM",
-      "title": "Consultant",
-      "industry": "咨询",
-      "region": "US",
-      "url": "https://www.ibm.com/careers",
-      "posted": "",
-      "source": "world-known",
-      "related_score": 0.0,
-      "why": "世界知名企业（咨询），值得保持关注"
     },
     {
       "company": "Stripe",
@@ -125,11 +114,22 @@
       "why": "世界知名企业（金融科技），值得保持关注"
     },
     {
-      "company": "Microsoft",
+      "company": "IBM",
+      "title": "Consultant",
+      "industry": "咨询",
+      "region": "US",
+      "url": "https://www.ibm.com/careers",
+      "posted": "",
+      "source": "world-known",
+      "related_score": 0.0,
+      "why": "世界知名企业（咨询），值得保持关注"
+    },
+    {
+      "company": "Adobe",
       "title": "Software Engineer",
       "industry": "互联网",
       "region": "US",
-      "url": "https://careers.microsoft.com",
+      "url": "https://careers.adobe.com",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
@@ -147,22 +147,22 @@
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Meta",
-      "title": "Software Engineer",
+      "company": "Meituan",
+      "title": "Backend Engineer",
       "industry": "互联网",
-      "region": "US",
-      "url": "https://www.metacareers.com",
+      "region": "CN",
+      "url": "https://zhaopin.meituan.com",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
       "why": "世界知名企业（互联网），值得保持关注"
     },
     {
-      "company": "Alibaba",
-      "title": "Java Engineer",
+      "company": "Salesforce",
+      "title": "Software Engineer",
       "industry": "互联网",
-      "region": "CN",
-      "url": "https://talent.alibaba.com",
+      "region": "US",
+      "url": "https://www.salesforce.com/company/careers",
       "posted": "",
       "source": "world-known",
       "related_score": 0.0,
